@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🐍 Noah Snake Adventure</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ============ LOVE BADGE (always visible) ============ -->
+  <div id="love-badge" class="love-badge">❤️ Made with Love by Dad Raef</div>
+
+  <!-- ============ APP ROOT ============ -->
+  <div id="app">
+
+    <!-- Animated sky/grass background, shared by every screen -->
+    <div class="scene-bg" aria-hidden="true">
+      <div class="sky"></div>
+      <div class="sun"></div>
+      <div class="cloud cloud-1"></div>
+      <div class="cloud cloud-2"></div>
+      <div class="cloud cloud-3"></div>
+      <div class="bird bird-1">˅</div>
+      <div class="bird bird-2">˅</div>
+      <div class="butterfly butterfly-1">🦋</div>
+      <div class="butterfly butterfly-2">🦋</div>
+      <div class="grass"></div>
+      <div class="flowers"></div>
+    </div>
+
+    <!-- ============ MAIN MENU SCREEN ============ -->
+    <section id="screen-menu" class="screen active">
+      <div class="menu-card">
+        <h1 class="game-title">
+          <span class="title-emoji">🐍</span>
+          <span class="title-text">
+            <span class="title-line title-line-1">NOAH</span>
+            <span class="title-line title-line-2">SNAKE ADVENTURE</span>
+          </span>
+        </h1>
+        <p class="subtitle">Made with ❤️ by Dad Raef</p>
+
+        <div class="high-score-pill">
+          <span class="hs-icon">🏆</span>
+          <span>Best Score: <strong id="menu-high-score">0</strong></span>
+        </div>
+
+        <nav class="menu-buttons">
+          <button id="btn-play" class="btn btn-primary btn-lg">
+            <span class="btn-icon">▶️</span> Play
+          </button>
+          <button id="btn-settings" class="btn btn-secondary">
+            <span class="btn-icon">⚙️</span> Settings
+          </button>
+          <button id="btn-credits" class="btn btn-secondary">
+            <span class="btn-icon">✨</span> Credits
+          </button>
+        </nav>
+
+        <button id="btn-sound-toggle" class="sound-toggle" aria-label="Toggle sound">
+          <span id="sound-icon">🔊</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ============ LEVEL SELECT (part of Play flow) ============ -->
+    <section id="screen-levels" class="screen">
+      <div class="menu-card">
+        <h2 class="panel-title">Choose Your Adventure</h2>
+        <div class="level-grid">
+          <button class="level-card" data-level="easy">
+            <span class="level-emoji">🐢</span>
+            <span class="level-name">Easy</span>
+            <span class="level-desc">Slow &amp; sweet</span>
+          </button>
+          <button class="level-card" data-level="normal">
+            <span class="level-emoji">🐇</span>
+            <span class="level-name">Normal</span>
+            <span class="level-desc">Just right</span>
+          </button>
+          <button class="level-card" data-level="hard">
+            <span class="level-emoji">🚀</span>
+            <span class="level-name">Hard</span>
+            <span class="level-desc">Super speedy</span>
+          </button>
+        </div>
+        <button id="btn-levels-back" class="btn btn-secondary">⬅️ Back</button>
+      </div>
+    </section>
+
+    <!-- ============ SETTINGS SCREEN ============ -->
+    <section id="screen-settings" class="screen">
+      <div class="menu-card">
+        <h2 class="panel-title">Settings</h2>
+
+        <div class="settings-row">
+          <span class="settings-label">🔊 Sound Effects</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-sfx" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="settings-row">
+          <span class="settings-label">🎵 Music</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-music" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="settings-row">
+          <span class="settings-label">🌗 Reduced Motion</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-motion">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <button id="btn-reset-score" class="btn btn-warning">🗑️ Reset High Score</button>
+        <button id="btn-settings-back" class="btn btn-secondary">⬅️ Back</button>
+      </div>
+    </section>
+
+    <!-- ============ CREDITS SCREEN ============ -->
+    <section id="screen-credits" class="screen">
+      <div class="menu-card">
+        <h2 class="panel-title">Credits</h2>
+        <div class="credits-body">
+          <p>🐍 <strong>Noah Snake Adventure</strong></p>
+          <p>Designed &amp; coded with love for Noah.</p>
+          <p>❤️ Made with Love by Dad Raef</p>
+          <p class="credits-hint">Psst… try typing a secret word while you play! 🤫</p>
+        </div>
+        <button id="btn-credits-back" class="btn btn-secondary">⬅️ Back</button>
+      </div>
+    </section>
+
+    <!-- ============ GAME SCREEN ============ -->
+    <section id="screen-game" class="screen">
+      <div class="game-hud">
+        <div class="hud-pill">🍎 <span id="hud-score">0</span></div>
+        <div class="hud-pill">🏆 <span id="hud-best">0</span></div>
+        <button id="btn-pause" class="hud-btn" aria-label="Pause">⏸️</button>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="game-canvas"></canvas>
+        <div id="countdown-overlay" class="countdown-overlay">
+          <span id="countdown-number">3</span>
+        </div>
+        <div id="secret-banner" class="secret-banner">⭐ YOU ARE A SUPER HERO NOAH ⭐</div>
+      </div>
+
+      <!-- Touch controls (shown on touch devices) -->
+      <div id="touch-controls" class="touch-controls">
+        <button class="touch-btn touch-up" data-dir="up">⬆️</button>
+        <div class="touch-mid">
+          <button class="touch-btn touch-left" data-dir="left">⬅️</button>
+          <button class="touch-btn touch-down" data-dir="down">⬇️</button>
+          <button class="touch-btn touch-right" data-dir="right">➡️</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PAUSE OVERLAY ============ -->
+    <div id="overlay-pause" class="overlay">
+      <div class="overlay-card">
+        <h2 class="panel-title">Paused ⏸️</h2>
+        <button id="btn-resume" class="btn btn-primary">▶️ Resume</button>
+        <button id="btn-restart" class="btn btn-secondary">🔄 Restart</button>
+        <button id="btn-pause-menu" class="btn btn-secondary">🏠 Main Menu</button>
+      </div>
+    </div>
+
+    <!-- ============ GAME OVER OVERLAY ============ -->
+    <div id="overlay-gameover" class="overlay">
+      <div class="overlay-card">
+        <h2 class="panel-title gameover-title">Great Job Noah! 🎉</h2>
+        <div class="gameover-scores">
+          <div class="score-box">
+            <span class="score-label">Score</span>
+            <span id="final-score" class="score-value">0</span>
+          </div>
+          <div class="score-box">
+            <span class="score-label">Best</span>
+            <span id="final-best" class="score-value">0</span>
+          </div>
+        </div>
+        <p id="new-record-msg" class="new-record">🌟 New Record! 🌟</p>
+        <button id="btn-play-again" class="btn btn-primary">🔁 Play Again</button>
+        <button id="btn-gameover-menu" class="btn btn-secondary">🏠 Main Menu</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Canvas layer for confetti / full-screen particle celebrations -->
+  <canvas id="fx-canvas"></canvas>
+
+  <script src="game.js"></script>
+</body>
+</html>
