@@ -588,7 +588,7 @@ button {
   justify-content: center;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 16px 18px;
+  padding: calc(16px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right)) 16px calc(18px + env(safe-area-inset-left));
   pointer-events: none;
 }
 .hud-pill, .hud-btn { pointer-events: auto; }
@@ -679,7 +679,19 @@ button {
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* v2.0 §7 — Smart Camera: gentle celebration zoom pulse */
+/* v2.1 polish §3 — tiny camera "bump" for ordinary fruit pickups */
+.canvas-wrap.eat-bump #game-canvas {
+  animation: eat-bump-pulse 0.22s ease-out;
+}
+@keyframes eat-bump-pulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.012); }
+  100% { transform: scale(1); }
+}
+
+/* v2.0 §7 — Smart Camera: gentle celebration zoom pulse.
+   Placed after .eat-bump so it always wins the cascade if both happen
+   to fire on the same frame (e.g. a fruit that also triggers a level-up). */
 .canvas-wrap.celebrate-zoom #game-canvas {
   animation: celebrate-zoom-pulse 0.7s ease-out;
 }
@@ -846,7 +858,7 @@ button {
 
 .touch-controls {
   position: absolute;
-  bottom: 4%;
+  bottom: calc(4% + env(safe-area-inset-bottom));
   left: 0; right: 0;
   z-index: 5;
   display: none;
@@ -1314,87 +1326,6 @@ body.high-contrast .overlay-card {
 .collection-name { font-size: 9px; font-weight: 700; color: var(--ink); text-align: center; }
 
 /* =========================================================
-   V2.1 — FAMILY EDITION (Local Multiplayer)
-   ========================================================= */
-
-/* §1 Mode selector cards borrow .level-card, just tint the border */
-.mode-card-vs { border-color: #FF8A80; }
-.mode-card-team { border-color: #7FB8F0; }
-
-/* §7 Player setup */
-.player-setup-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-bottom: 16px;
-}
-.player-setup-col {
-  background: #F1F6FF;
-  border-radius: var(--radius-md);
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.player-setup-heading { font-size: 13px; color: var(--ink); margin-bottom: 4px; }
-.player-name-input, .player-select {
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid #DCE8FA;
-  font-size: 13px;
-  font-family: inherit;
-}
-
-/* Multiplayer HUD */
-.multi-hud-group { display: flex; gap: 10px; }
-.multi-hud-group.hidden { display: none; }
-.hud-pill-p1 { border: 2px solid #4CAF50; }
-.hud-pill-p2 { border: 2px solid #2E6FD9; }
-
-/* §6 Quick emote clusters */
-.emote-row {
-  position: absolute;
-  display: flex;
-  gap: 6px;
-  z-index: 6;
-}
-.emote-row-p1 { left: 3%; bottom: 26%; }
-.emote-row-p2 { right: 3%; bottom: 26%; }
-.emote-btn {
-  width: 34px; height: 34px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.85);
-  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
-  font-size: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.emote-btn:active { transform: scale(0.88); }
-
-/* §2 Split-screen touch controls */
-.split-touch-controls {
-  position: absolute;
-  bottom: 2%;
-  left: 0; right: 0;
-  display: none;
-  justify-content: space-between;
-  padding: 0 3%;
-  z-index: 6;
-  pointer-events: none;
-}
-.split-touch-controls .touch-controls {
-  position: static;
-  display: flex;
-  transform: scale(0.8);
-  pointer-events: auto;
-}
-@media (hover: none) and (pointer: coarse) {
-  .split-touch-controls { display: flex; }
-}
-
-/* =========================================================
    REDUCED MOTION
    ========================================================= */
 body.reduced-motion * {
@@ -1410,10 +1341,23 @@ body.reduced-motion * {
   .menu-card { padding: 24px 20px; }
   .level-grid { gap: 8px; }
   .touch-mid { gap: 34px; }
+  /* v2.1 polish — keep all HUD pills on one line instead of wrapping/overlapping */
+  .game-hud { gap: 6px; padding-left: calc(10px + env(safe-area-inset-left)); padding-right: calc(10px + env(safe-area-inset-right)); }
+  .hud-pill { padding: 6px 10px; font-size: 13px; }
+  .hud-btn { width: 36px; height: 36px; font-size: 15px; }
+}
+
+@media (max-width: 360px) {
+  /* v2.1 polish — extra-small phones (e.g. iPhone SE) get slightly tighter HUD spacing */
+  .game-hud { gap: 4px; }
+  .hud-pill { padding: 5px 8px; font-size: 12px; }
 }
 
 @media (orientation: landscape) and (max-height: 480px) {
   .menu-card { padding: 16px 22px; max-height: 92vh; overflow-y: auto; }
   .title-emoji { font-size: 36px; }
-  .touch-controls { bottom: 2%; transform: scale(0.85); }
+  .touch-controls { bottom: calc(2% + env(safe-area-inset-bottom)); transform: scale(0.85); }
+  /* v2.1 polish — landscape phones: keep the HUD compact and clear of the notch/camera cutout */
+  .game-hud { padding-top: calc(8px + env(safe-area-inset-top)); gap: 6px; }
+  .hud-pill { padding: 5px 10px; font-size: 12px; }
 }

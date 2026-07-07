@@ -61,20 +61,6 @@
       // v2.0 §6 — Pet Evolution: per-pet XP/stage, keyed by pet id
       petProgress: {},
       cinematicSeen: false, // v2.0 §1
-      // v2.1 — Family Edition
-      familyStats: {
-        gamesPlayedTogether: 0,
-        vsWins: { p1: 0, p2: 0, ties: 0 },
-        teamWins: 0,
-        longestTeamSurvivalSec: 0,
-        totalFruitsTogether: 0,
-        totalCoinsTogether: 0
-      },
-      completedCoopMissions: [],
-      players: {
-        p1: { name: 'Noah', skin: 'green', pet: 'fox', color: '#4CAF50' },
-        p2: { name: 'Dad', skin: 'blue', pet: 'panda', color: '#2E6FD9' }
-      },
       weeklyQuest: { weekStart: 0, progress: 0, claimed: false },
       stats: {
         gamesPlayed: 0,
@@ -117,15 +103,6 @@
         this.data.dailyQuest = { ...this.defaults.dailyQuest, ...(parsed.dailyQuest || {}) };
         this.data.weeklyQuest = { ...this.defaults.weeklyQuest, ...(parsed.weeklyQuest || {}) };
         this.data.petProgress = { ...this.defaults.petProgress, ...(parsed.petProgress || {}) };
-        this.data.familyStats = { ...this.defaults.familyStats, ...(parsed.familyStats || {}) };
-        if (this.data.familyStats.vsWins) {
-          this.data.familyStats.vsWins = { ...this.defaults.familyStats.vsWins, ...(parsed.familyStats && parsed.familyStats.vsWins) };
-        }
-        this.data.players = {
-          p1: { ...this.defaults.players.p1, ...((parsed.players && parsed.players.p1) || {}) },
-          p2: { ...this.defaults.players.p2, ...((parsed.players && parsed.players.p2) || {}) }
-        };
-        if (!Array.isArray(this.data.completedCoopMissions)) this.data.completedCoopMissions = [];
         if (!Array.isArray(this.data.unlockedSkins)) this.data.unlockedSkins = ['green'];
         if (!this.data.unlockedSkins.includes('green')) this.data.unlockedSkins.push('green');
         if (!Array.isArray(this.data.completedMissions)) this.data.completedMissions = [];
@@ -261,46 +238,6 @@
       if (xp >= 400) return 2; // Adult
       if (xp >= 120) return 1; // Young
       return 0; // Baby
-    },
-
-    // ---------- v2.1 §9 — Family Statistics ----------
-    recordFamilyGame() {
-      this.data.familyStats.gamesPlayedTogether++;
-      this.save();
-    },
-    recordVsWin(who) { // 'p1' | 'p2' | 'ties'
-      this.data.familyStats.vsWins[who]++;
-      this.save();
-    },
-    recordTeamWin() {
-      this.data.familyStats.teamWins++;
-      this.save();
-    },
-    recordTeamSurvival(seconds) {
-      if (seconds > this.data.familyStats.longestTeamSurvivalSec) {
-        this.data.familyStats.longestTeamSurvivalSec = seconds;
-        this.save(); // only write when the record actually improves
-      }
-    },
-    addFamilyFruits(n) {
-      this.data.familyStats.totalFruitsTogether += n;
-      this.save();
-    },
-    addFamilyCoins(n) {
-      this.data.familyStats.totalCoinsTogether += n;
-      this.save();
-    },
-    completeCoopMission(id) {
-      if (!this.data.completedCoopMissions.includes(id)) {
-        this.data.completedCoopMissions.push(id);
-        this.save();
-        return true;
-      }
-      return false;
-    },
-    setPlayerProfile(who, key, value) {
-      this.data.players[who][key] = value;
-      this.save();
     }
   };
   Storage.load();
@@ -431,7 +368,7 @@
      (pause, game over).
      =========================================================== */
   const Screens = {
-    all: ['menu', 'levels', 'settings', 'credits', 'game', 'shop', 'achievements', 'stats', 'missions', 'worldmap', 'collection', 'mode-select', 'player-setup', 'multiplayer'],
+    all: ['menu', 'levels', 'settings', 'credits', 'game', 'shop', 'achievements', 'stats', 'missions', 'worldmap', 'collection'],
     show(name) {
       this.all.forEach((s) => $(`screen-${s}`).classList.toggle('active', s === name));
     },
@@ -524,7 +461,7 @@
     floatText(x, y, text, color = '#FFD700') {
       this.floaters.push({
         x: x * devicePixelRatio, y: y * devicePixelRatio,
-        text, color, life: 1, decay: 0.012
+        text, color, life: 1, decay: 0.012, age: 0
       });
     },
 
@@ -542,6 +479,8 @@
         ctx.globalAlpha = clamp(p.life, 0, 1);
         ctx.translate(p.x, p.y);
         if (p.angle) ctx.rotate(p.angle);
+        // v2.1 polish — non-confetti burst particles ease down in size as they fade, for a softer finish
+        if (!p.confetti) { const s = 0.6 + clamp(p.life, 0, 1) * 0.4; ctx.scale(s, s); }
         ctx.fillStyle = p.color;
         if (p.shape === 'circle') {
           ctx.beginPath();
@@ -560,16 +499,24 @@
 
       this.floaters = this.floaters.filter((f) => f.life > 0);
       this.floaters.forEach((f) => {
-        f.y -= 1.4 * devicePixelRatio;
+        f.age = (f.age || 0) + 1;
+        // v2.1 polish — ease-out rise: fast at first, gently settling (was constant speed)
+        const speed = 1.4 * devicePixelRatio * clamp(1.4 - f.age * 0.02, 0.5, 1.4);
+        f.y -= speed;
         f.life -= f.decay;
+        // v2.1 polish — quick "pop" scale-in over the first few frames, then settle to 1
+        const popIn = clamp(f.age / 6, 0, 1);
+        const scale = 0.6 + popIn * 0.4 + (popIn < 1 ? Math.sin(popIn * Math.PI) * 0.15 : 0);
         ctx.save();
         ctx.globalAlpha = clamp(f.life, 0, 1);
+        ctx.translate(f.x, f.y);
+        ctx.scale(scale, scale);
         ctx.fillStyle = f.color;
         ctx.font = `900 ${22 * devicePixelRatio}px Arial Rounded MT Bold, sans-serif`;
         ctx.textAlign = 'center';
-        ctx.shadowColor = 'rgba(0,0,0,0.3)';
-        ctx.shadowBlur = 4;
-        ctx.fillText(f.text, f.x, f.y);
+        ctx.shadowColor = 'rgba(0,0,0,0.22)'; // v2.1 polish — softer shadow (was 0.3)
+        ctx.shadowBlur = 5;
+        ctx.fillText(f.text, 0, 0);
         ctx.restore();
       });
 
@@ -603,6 +550,17 @@
     wrap.classList.remove('celebrate-zoom');
     void wrap.offsetWidth;
     wrap.classList.add('celebrate-zoom');
+  };
+
+  // v2.1 polish §3 — an even tinier, quicker "bump" for ordinary fruit pickups.
+  // Deliberately separate from smartCameraPulse so everyday eating never feels
+  // as big as an achievement/level-up celebration.
+  const eatFeedbackPulse = () => {
+    const wrap = $('game-canvas-wrap');
+    if (!wrap || document.body.classList.contains('reduced-motion')) return;
+    wrap.classList.remove('eat-bump');
+    void wrap.offsetWidth;
+    wrap.classList.add('eat-bump');
   };
 
   /* ===========================================================
@@ -934,31 +892,6 @@
   const WEEKLY_QUEST = { title: 'Play 5 Games This Week', icon: '🗓️', target: 5, reward: { coins: 60, xp: 100 } };
 
   /* ===========================================================
-     V2.1 — FAMILY EDITION (Local Multiplayer)
-     =========================================================== */
-  // §6 — quick tap-to-react emotes, shown as a small bubble above a snake
-  const QUICK_EMOTES = ['😀', '😂', '❤️', '👍', '🎉', 'WOW!'];
-
-  // §8 — Co-op missions, only relevant in Team Adventure mode
-  const COOP_MISSIONS = [
-    { id: 'coop_fruits50', icon: '🍎', title: 'Collect 50 Fruits Together', target: 50,
-      progress: (s) => s.fruits, reward: { coins: 40, xp: 60 } },
-    { id: 'coop_score10000', icon: '⭐', title: 'Reach 10000 Score', target: 10000,
-      progress: (s) => s.score, reward: { coins: 80, xp: 120 } }
-  ];
-
-  // §5 — Team Abilities. Each is picked up like a power-up but benefits BOTH
-  // players at once in Team Adventure mode.
-  const TEAM_ABILITIES = {
-    rescue:  { icon: '🛟', name: 'Rescue Shield', color: '#7FB8F0', duration: 10000 },
-    magnet2: { icon: '🧲', name: 'Shared Magnet', color: '#B983FF', duration: 8000 },
-    double2: { icon: '✨', name: 'Team Double Score', color: '#FFD700', duration: 8000 },
-    revive:  { icon: '💖', name: 'Revive Token', color: '#FF6F91', duration: 0 }, // stored, used on crash
-    rainbow2:{ icon: '🌈', name: 'Rainbow Team Boost', color: '#FF6F91', duration: 7000 }
-  };
-  const TEAM_ABILITY_KEYS = Object.keys(TEAM_ABILITIES);
-
-  /* ===========================================================
      6. THE GAME  (Snake + Food + Loop)
      =========================================================== */
   // V1.2 — Better Food System: 6 fruits, each with its own point
@@ -1173,7 +1106,6 @@
       while (this.acc >= effectiveStepMs) {
         this.tick();
         this.acc -= effectiveStepMs;
-        if (!this.running) break; // BUG FIX — tick() may have ended the game; stop this batch immediately
       }
       this.render();
     },
@@ -1308,6 +1240,7 @@
       const py = rect.top + (this.food.y + 0.5) * this.cell;
       FX.burst(px, py, [this.food.color, '#FFD700', '#FFFFFF']);
       FX.floatText(px, py, `+${points}`, this.food.color);
+      eatFeedbackPulse(); // v2.1 polish §3 — tiny camera bump, distinct from the bigger celebration zoom
       FX.starBurst(6); // Visual Evolution — tiny star burst on every fruit
       if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) { /* unsupported */ } }
 
@@ -1903,12 +1836,16 @@
       const cx = f.x * this.cell + this.cell / 2;
       const cy = f.y * this.cell + this.cell / 2 + bounceOffset;
 
-      // Shadow
+      // Shadow — v2.1 polish: soft gradient fade instead of a flat-alpha ellipse
+      const shadowCx = cx, shadowCy = f.y * this.cell + this.cell * 0.85;
+      const shadowRx = this.cell * 0.28, shadowRy = this.cell * 0.1;
       ctx.save();
-      ctx.globalAlpha = 0.25;
-      ctx.fillStyle = '#000';
+      const shadowGrad = ctx.createRadialGradient(shadowCx, shadowCy, 0, shadowCx, shadowCy, shadowRx);
+      shadowGrad.addColorStop(0, 'rgba(0,0,0,0.22)');
+      shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = shadowGrad;
       ctx.beginPath();
-      ctx.ellipse(cx, f.y * this.cell + this.cell * 0.85, this.cell * 0.28, this.cell * 0.1, 0, 0, Math.PI * 2);
+      ctx.ellipse(shadowCx, shadowCy, shadowRx, shadowRy, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
@@ -2133,501 +2070,6 @@
   };
 
   /* ===========================================================
-     V2.1 — LOCAL MULTIPLAYER ENGINE (VS Battle / Team Adventure)
-     A self-contained two-snake engine. Reuses Storage/Audio/FX/
-     FOODS/SKINS/PETS/GRID_SIZE from the solo game, but keeps its
-     own state entirely — Solo Adventure is never touched by this.
-     =========================================================== */
-  const MultiGame = {
-    canvas: null, ctx: null, cell: 20,
-    mode: 'vs', // 'vs' | 'team'
-    stepMs: 160,
-    acc: 0, lastTime: 0, rafId: null,
-    running: false, paused: false,
-    food: null,
-    ability: null,           // shared team-ability pickup on the board
-    activeAbilities: {},     // { rescue: expiresAtMs, magnet2: ..., double2: ..., rainbow2: ... }
-    reviveTokens: 0,         // Team mode — stored Revive Token charges
-    teamStats: { fruits: 0, score: 0, coins: 0, bossesDefeated: 0 },
-    sessionStartTime: 0,
-    coopMissionsAtStart: 0,
-    players: null,
-    emoteBubbles: {},        // { p1: {text, life} }
-
-    init() {
-      this.canvas = $('multi-canvas');
-      this.ctx = this.canvas.getContext('2d');
-      this.resizeCanvas();
-      window.addEventListener('resize', () => this.resizeCanvas());
-    },
-
-    resizeCanvas() {
-      const maxW = window.innerWidth * 0.90;
-      const maxH = window.innerHeight * 0.78;
-      const size = Math.floor(Math.min(maxW, maxH, 640) / GRID_SIZE) * GRID_SIZE;
-      this.cell = size / GRID_SIZE;
-      this.canvas.width = size * devicePixelRatio;
-      this.canvas.height = size * devicePixelRatio;
-      this.canvas.style.width = size + 'px';
-      this.canvas.style.height = size + 'px';
-      this.ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-    },
-
-    start(mode) {
-      this.mode = mode;
-      this.stepMs = LEVELS.normal.stepMs;
-      const mid = Math.floor(GRID_SIZE / 2);
-      const prof = Storage.data.players;
-
-      const makePlayer = (key, prof, bodyStart) => ({
-        key, name: prof.name, skin: prof.skin, pet: prof.pet, color: prof.color,
-        body: bodyStart.map((p) => ({ ...p })),
-        dir: { x: 1, y: 0 }, nextDir: { x: 1, y: 0 },
-        score: 0, combo: 0, comboTimer: 0, alive: true, glowFrames: 0
-      });
-
-      this.players = {
-        p1: makePlayer('p1', prof.p1, [{ x: mid - 1, y: mid - 3 }, { x: mid - 2, y: mid - 3 }, { x: mid - 3, y: mid - 3 }]),
-        p2: makePlayer('p2', prof.p2, [{ x: mid - 1, y: mid + 3 }, { x: mid - 2, y: mid + 3 }, { x: mid - 3, y: mid + 3 }])
-      };
-
-      this.ability = null;
-      this.activeAbilities = {};
-      this.reviveTokens = 0;
-      this.teamStats = { fruits: 0, score: 0, coins: 0, bossesDefeated: 0 };
-      this.sessionStartTime = Date.now();
-      this.coopMissionsAtStart = COOP_MISSIONS.filter((m) => Storage.data.completedCoopMissions.includes(m.id)).length;
-      this.emoteBubbles = {};
-      this.placeFood();
-      this.updateHud();
-      const teamBanner = $('multi-team-banner');
-      if (teamBanner) teamBanner.classList.remove('show');
-      Storage.recordFamilyGame(); // v2.1 §9
-      this.paused = false;
-      this.running = false;
-      this.runCountdown();
-    },
-
-    runCountdown() {
-      const overlay = $('multi-countdown-overlay');
-      const numEl = $('multi-countdown-number');
-      overlay.classList.add('active');
-      let n = 3;
-      numEl.textContent = n;
-      Audio.click();
-      const tick = () => {
-        n--;
-        if (n > 0) {
-          numEl.textContent = n;
-          Audio.click();
-          setTimeout(tick, 700);
-        } else {
-          numEl.textContent = 'GO!';
-          Audio.levelUp();
-          setTimeout(() => {
-            overlay.classList.remove('active');
-            this.running = true;
-            this.lastTime = performance.now();
-            this.acc = 0;
-            this.loop(this.lastTime);
-          }, 500);
-        }
-      };
-      setTimeout(tick, 700);
-    },
-
-    occupied(pos) {
-      const onBody = (p) => p.alive && p.body.some((s) => s.x === pos.x && s.y === pos.y);
-      if (onBody(this.players.p1) || onBody(this.players.p2)) return true;
-      if (this.food && this.food.x === pos.x && this.food.y === pos.y) return true;
-      if (this.ability && this.ability.x === pos.x && this.ability.y === pos.y) return true;
-      return false;
-    },
-
-    placeFood() {
-      let pos, tries = 0;
-      do {
-        pos = { x: randInt(0, GRID_SIZE - 1), y: randInt(0, GRID_SIZE - 1) };
-        tries++;
-      } while (tries < 50 && this.occupied(pos));
-      const kind = FOODS[randInt(0, FOODS.length - 1)];
-      this.food = { ...pos, ...kind, bounce: 0 };
-    },
-
-    maybeSpawnAbility() {
-      if (this.mode !== 'team' || this.ability) return; // team abilities only matter in Team Adventure
-      if (Math.random() < 0.12) {
-        let pos, tries = 0;
-        do {
-          pos = { x: randInt(0, GRID_SIZE - 1), y: randInt(0, GRID_SIZE - 1) };
-          tries++;
-        } while (tries < 50 && this.occupied(pos));
-        const type = TEAM_ABILITY_KEYS[randInt(0, TEAM_ABILITY_KEYS.length - 1)];
-        this.ability = { type, ...pos, bounce: 0 };
-      }
-    },
-
-    collectAbility(byPlayer) {
-      const def = TEAM_ABILITIES[this.ability.type];
-      const type = this.ability.type;
-      this.ability = null;
-      Audio.levelUp();
-      const rect = this.canvas.getBoundingClientRect();
-      const px = rect.left + rect.width / 2, py = rect.top + rect.height / 2;
-      FX.confetti(50, [def.color, '#FFFFFF']);
-      FX.floatText(px, py, def.name + '!', def.color);
-      if (type === 'revive') {
-        this.reviveTokens++; // stored for later, not time-based
-      } else {
-        this.activeAbilities[type] = Date.now() + def.duration;
-      }
-      this.updateHud();
-    },
-
-    setDirection(who, x, y) {
-      const p = this.players && this.players[who];
-      if (!p || !p.alive) return;
-      if (p.body.length > 1 && x === -p.dir.x && y === -p.dir.y) return;
-      p.nextDir = { x, y };
-    },
-
-    showEmote(who, text) {
-      this.emoteBubbles[who] = { text, life: 1 };
-    },
-
-    loop(time) {
-      if (!this.running) return;
-      this.rafId = requestAnimationFrame((t) => this.loop(t));
-      const delta = time - this.lastTime;
-      this.lastTime = time;
-      if (this.paused) return;
-
-      this.acc += delta;
-      while (this.acc >= this.stepMs) {
-        this.tick();
-        this.acc -= this.stepMs;
-        if (!this.running) break; // BUG FIX — tick() may have ended the match; stop this batch immediately
-      }
-      this.render();
-    },
-
-    tick() {
-      const now = Date.now();
-      Object.keys(this.activeAbilities).forEach((k) => {
-        if (this.activeAbilities[k] <= now) delete this.activeAbilities[k];
-      });
-
-      const p1 = this.players.p1, p2 = this.players.p2;
-      [p1, p2].forEach((p) => {
-        if (p.comboTimer > 0) { p.comboTimer -= this.stepMs; if (p.comboTimer <= 0) p.combo = 0; }
-        if (p.glowFrames > 0) p.glowFrames--;
-      });
-
-      const alive = [p1, p2].filter((p) => p.alive);
-      if (!alive.length) return;
-
-      const newHeads = {};
-      alive.forEach((p) => {
-        p.dir = p.nextDir;
-        let nh = { x: p.body[0].x + p.dir.x, y: p.body[0].y + p.dir.y };
-        nh.x = (nh.x + GRID_SIZE) % GRID_SIZE;
-        nh.y = (nh.y + GRID_SIZE) % GRID_SIZE;
-        newHeads[p.key] = nh;
-      });
-
-      // Collision detection: own body, the other snake, or a head-on crash.
-      // v2.1 Team mode: a Rescue Shield or a stored Revive Token can save a player.
-      const dying = [];
-      alive.forEach((p) => {
-        const nh = newHeads[p.key];
-        const other = p.key === 'p1' ? p2 : p1;
-        const hitSelf = p.body.some((s) => s.x === nh.x && s.y === nh.y);
-        const hitOther = other.alive && other.body.some((s) => s.x === nh.x && s.y === nh.y);
-        const headOn = other.alive && newHeads[other.key] && newHeads[other.key].x === nh.x && newHeads[other.key].y === nh.y;
-        if (hitSelf || hitOther || headOn) dying.push(p.key);
-      });
-
-      dying.forEach((key) => {
-        if (this.mode === 'team' && this.activeAbilities.rescue) {
-          delete this.activeAbilities.rescue; // Rescue Shield saves the first crash this tick
-          FX.confetti(40, ['#7FB8F0', '#FFFFFF']);
-          Audio.click();
-          return;
-        }
-        if (this.mode === 'team' && this.reviveTokens > 0) {
-          this.reviveTokens--;
-          FX.confetti(60, ['#FF6F91', '#FFFFFF']);
-          Audio.achievement();
-          this.showEmote(key, '💖');
-          return;
-        }
-        this.players[key].alive = false;
-        Audio.gameOver();
-      });
-
-      // Move survivors, handle eating
-      alive.forEach((p) => {
-        if (!p.alive) return;
-        const nh = newHeads[p.key];
-        p.body.unshift(nh);
-        if (this.food && nh.x === this.food.x && nh.y === this.food.y) {
-          this.eatFood(p);
-        } else {
-          p.body.pop();
-        }
-        if (this.ability && this.ability.x === nh.x && this.ability.y === nh.y) {
-          this.collectAbility(p.key);
-        }
-      });
-
-      // fade out emote bubbles
-      Object.keys(this.emoteBubbles).forEach((k) => {
-        this.emoteBubbles[k].life -= this.stepMs / 1800;
-        if (this.emoteBubbles[k].life <= 0) delete this.emoteBubbles[k];
-      });
-
-      this.maybeSpawnAbility();
-      this.checkEndConditions();
-    },
-
-    eatFood(p) {
-      let points = this.food.points || 100;
-      p.combo = p.comboTimer > 0 ? p.combo + 1 : 1;
-      p.comboTimer = 2200;
-      if (p.combo >= 2) points += Math.round(points * 0.1 * Math.min(p.combo, 5));
-      if (this.mode === 'team' && this.activeAbilities.double2) points *= 2;
-
-      p.score += points;
-      p.glowFrames = 10;
-      this.teamStats.fruits++;
-      this.teamStats.score = this.players.p1.score + this.players.p2.score;
-      Storage.recordFruit(this.food.name);
-      Storage.addFamilyFruits(1); // v2.1 §9
-      Audio.eatFruit(this.food.pitch || 660);
-
-      const rect = this.canvas.getBoundingClientRect();
-      const px = rect.left + (this.food.x + 0.5) * this.cell;
-      const py = rect.top + (this.food.y + 0.5) * this.cell;
-      FX.burst(px, py, [this.food.color, '#FFD700', '#FFFFFF']);
-      FX.floatText(px, py, `+${points}`, this.food.color);
-
-      // v2.1 — Shared Magnet gently pulls fresh food toward whichever player is closer
-      this.placeFood();
-      if (this.mode === 'team' && this.activeAbilities.magnet2) {
-        const head = p.body[0];
-        const dxf = this.food.x - head.x, dyf = this.food.y - head.y;
-        if (Math.abs(dxf) + Math.abs(dyf) > 6) {
-          this.food.x = clamp(head.x + Math.sign(dxf) * 4, 0, GRID_SIZE - 1);
-          this.food.y = clamp(head.y + Math.sign(dyf) * 4, 0, GRID_SIZE - 1);
-        }
-      }
-      this.updateHud();
-    },
-
-    checkEndConditions() {
-      const p1 = this.players.p1, p2 = this.players.p2;
-      if (this.mode === 'vs') {
-        if (!p1.alive || !p2.alive) this.endVs();
-      } else {
-        const teamScore = p1.score + p2.score;
-        if (!p1.alive && !p2.alive) this.endTeam(false);
-        else if (teamScore >= 10000) this.endTeam(true);
-        this.checkCoopMissions();
-      }
-    },
-
-    checkCoopMissions() {
-      const survivalSec = Math.round((Date.now() - this.sessionStartTime) / 1000);
-      Storage.recordTeamSurvival(survivalSec);
-      const statsSnapshot = {
-        fruits: this.teamStats.fruits,
-        score: this.players.p1.score + this.players.p2.score,
-        coins: this.teamStats.coins,
-        bossesDefeated: this.teamStats.bossesDefeated
-      };
-      COOP_MISSIONS.forEach((m) => {
-        if (Storage.data.completedCoopMissions.includes(m.id)) return;
-        if (m.progress(statsSnapshot) >= m.target) {
-          if (Storage.completeCoopMission(m.id)) {
-            Storage.addCoins(m.reward.coins);
-            Storage.addXp(m.reward.xp);
-            Audio.achievement();
-            FX.confetti(90, ['#FFD700', '#6FE08A']);
-            const banner = $('multi-team-banner');
-            if (banner) {
-              banner.innerHTML = `🎯 Co-op Mission! <br> ${m.title} <br> +${m.reward.coins}🪙 +${m.reward.xp}XP`;
-              banner.classList.add('show');
-              setTimeout(() => banner.classList.remove('show'), 3200);
-            }
-          }
-        }
-      });
-    },
-
-    endVs() {
-      this.running = false;
-      cancelAnimationFrame(this.rafId);
-      const p1 = this.players.p1, p2 = this.players.p2;
-      let title, who;
-      if (!p1.alive && !p2.alive) { title = "🤝 It's a Tie!"; who = 'ties'; Audio.gameOver(); }
-      else { const winner = p1.alive ? p1 : p2; who = p1.alive ? 'p1' : 'p2'; title = `🏆 ${winner.name} Wins!`; Audio.victory(); FX.confetti(180); }
-      Storage.recordVsWin(who);
-      $('vs-winner-title').textContent = title;
-      $('vs-winner-p1-score').textContent = p1.score;
-      $('vs-winner-p2-score').textContent = p2.score;
-      setTimeout(() => Screens.overlay('vs-winner', true), 260);
-    },
-
-    endTeam(success) {
-      this.running = false;
-      cancelAnimationFrame(this.rafId);
-      const p1 = this.players.p1, p2 = this.players.p2;
-      const teamScore = p1.score + p2.score;
-      Storage.addFamilyCoins(this.teamStats.coins);
-      if (success) {
-        Storage.recordTeamWin();
-        $('team-victory-title').textContent = '❤️ Team Victory!';
-        $('team-victory-subtitle').textContent = `${p1.name} & ${p2.name} did it together!`;
-        Audio.victory();
-        FX.confetti(220);
-      } else {
-        $('team-victory-title').textContent = '💪 So Close, Team!';
-        $('team-victory-subtitle').textContent = 'Try again together!';
-        Audio.gameOver();
-      }
-      $('team-victory-score').textContent = `${teamScore} / 10000`;
-      setTimeout(() => Screens.overlay('team-victory', true), 260);
-    },
-
-    updateHud() {
-      const p1 = this.players.p1, p2 = this.players.p2;
-      if (this.mode === 'vs') {
-        $('multi-hud-vs').classList.remove('hidden');
-        $('multi-hud-team').classList.add('hidden');
-        $('hud-p1-score').textContent = p1.score;
-        $('hud-p2-score').textContent = p2.score;
-      } else {
-        $('multi-hud-vs').classList.add('hidden');
-        $('multi-hud-team').classList.remove('hidden');
-        $('hud-team-score-multi').textContent = `${p1.score + p2.score} / 10000`;
-      }
-    },
-
-    pause() { this.paused = true; Audio.stopMusic(); this.render(); },
-    resume() { this.paused = false; this.lastTime = performance.now(); Audio.startMusic('game'); },
-    stop() {
-      this.running = false;
-      if (this.rafId) cancelAnimationFrame(this.rafId);
-      Audio.stopMusic();
-    },
-
-    /* ---------- Rendering ---------- */
-    render() {
-      const ctx = this.ctx;
-      const size = this.canvas.width / devicePixelRatio;
-      ctx.clearRect(0, 0, size, size);
-      this.drawBoard(ctx);
-      if (this.ability) this.drawAbility(ctx);
-      if (this.food) this.drawFood(ctx);
-      this.drawSnake(ctx, this.players.p1);
-      this.drawSnake(ctx, this.players.p2);
-      this.drawEmotes(ctx);
-    },
-
-    drawBoard(ctx) {
-      for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-          ctx.fillStyle = (x + y) % 2 === 0 ? '#A9E38F' : '#9FDB83';
-          ctx.fillRect(x * this.cell, y * this.cell, this.cell, this.cell);
-        }
-      }
-    },
-
-    drawFood(ctx) {
-      const f = this.food;
-      f.bounce = (f.bounce + 0.15) % (Math.PI * 2);
-      const bounceOffset = Math.sin(f.bounce) * 3;
-      const cx = f.x * this.cell + this.cell / 2;
-      const cy = f.y * this.cell + this.cell / 2 + bounceOffset;
-      ctx.save();
-      ctx.shadowColor = f.color;
-      ctx.shadowBlur = 16;
-      ctx.font = `${this.cell * 0.9}px serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(f.emoji, cx, cy);
-      ctx.restore();
-    },
-
-    drawAbility(ctx) {
-      const a = this.ability;
-      const def = TEAM_ABILITIES[a.type];
-      a.bounce = (a.bounce + 0.16) % (Math.PI * 2);
-      const cx = a.x * this.cell + this.cell / 2;
-      const cy = a.y * this.cell + this.cell / 2 + Math.sin(a.bounce) * 3;
-      ctx.save();
-      ctx.shadowColor = def.color;
-      ctx.shadowBlur = 20;
-      ctx.font = `${this.cell * 0.8}px serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(def.icon, cx, cy);
-      ctx.restore();
-    },
-
-    drawSnake(ctx, p) {
-      const skin = SKINS[p.skin] || SKINS.green;
-      const rainbow = ['#FF6F61', '#FFD93D', '#6FE08A', '#7FB8F0', '#B983FF'];
-      p.body.forEach((seg, i) => {
-        const cx = seg.x * this.cell + this.cell / 2;
-        const cy = seg.y * this.cell + this.cell / 2;
-        const isHead = i === 0;
-        const radius = isHead ? this.cell * 0.46 : this.cell * 0.4 * (1 - i / (p.body.length * 2.2));
-        let bodyColor;
-        if (this.activeAbilities.rainbow2 && this.mode === 'team') bodyColor = rainbow[i % rainbow.length];
-        else if (p.glowFrames > 0) bodyColor = '#FFD700';
-        else bodyColor = isHead ? skin.headColor : skin.bodyColor;
-
-        ctx.save();
-        ctx.globalAlpha = p.alive ? 1 : 0.35;
-        if (p.glowFrames > 0) { ctx.shadowColor = '#FFD700'; ctx.shadowBlur = 18; }
-        ctx.fillStyle = bodyColor;
-        ctx.beginPath();
-        ctx.arc(cx, cy, Math.max(radius, 4), 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-
-        if (isHead && p.alive) {
-          const pet = PETS[p.pet] || PETS.fox;
-          ctx.save();
-          ctx.font = `${this.cell * 0.5}px serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(pet.icon, cx, cy - this.cell * 0.55);
-          ctx.restore();
-        }
-      });
-    },
-
-    drawEmotes(ctx) {
-      ['p1', 'p2'].forEach((key) => {
-        const bubble = this.emoteBubbles[key];
-        const p = this.players[key];
-        if (!bubble || !p.body[0]) return;
-        const cx = p.body[0].x * this.cell + this.cell / 2;
-        const cy = p.body[0].y * this.cell + this.cell / 2 - this.cell * (1 + (1 - bubble.life));
-        ctx.save();
-        ctx.globalAlpha = clamp(bubble.life, 0, 1);
-        ctx.font = `${this.cell * 0.7}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(bubble.text, cx, cy);
-        ctx.restore();
-      });
-    }
-  };
-
-  /* ===========================================================
      7. INPUT HANDLING
      Keyboard (arrows + WASD), touch buttons, swipe gestures,
      and the secret "N-O-A-H" code detector.
@@ -2638,22 +2080,18 @@
       document.querySelectorAll('.touch-btn').forEach((btn) => {
         btn.addEventListener('touchstart', (e) => {
           e.preventDefault();
-          this.dirFromName(btn.dataset.dir, btn.dataset.multiPlayer);
+          this.dirFromName(btn.dataset.dir);
         }, { passive: false });
-        btn.addEventListener('click', () => this.dirFromName(btn.dataset.dir, btn.dataset.multiPlayer));
+        btn.addEventListener('click', () => this.dirFromName(btn.dataset.dir));
       });
       this.initSwipe();
     },
 
-    dirFromName(name, multiPlayer) {
+    dirFromName(name) {
       Audio.resume();
       const map = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
       const [x, y] = map[name];
-      if (multiPlayer) {
-        if (MultiGame.running && !MultiGame.paused) MultiGame.setDirection(multiPlayer, x, y);
-      } else if (Game.running && !Game.paused) {
-        Game.setDirection(x, y);
-      }
+      if (Game.running && !Game.paused) Game.setDirection(x, y);
     },
 
     onKey(e) {
@@ -2684,17 +2122,6 @@
       }
       if (key === 'Escape' && Game.running) {
         UI.togglePause();
-      }
-
-      // v2.1 §2 — Local multiplayer: Arrow Keys steer Player 1, WASD steers Player 2
-      if (MultiGame.running && !MultiGame.paused) {
-        const p1Map = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
-        const p2Map = { w: [0, -1], W: [0, -1], s: [0, 1], S: [0, 1], a: [-1, 0], A: [-1, 0], d: [1, 0], D: [1, 0] };
-        if (p1Map[key]) { Audio.resume(); MultiGame.setDirection('p1', ...p1Map[key]); e.preventDefault(); }
-        else if (p2Map[key]) { Audio.resume(); MultiGame.setDirection('p2', ...p2Map[key]); e.preventDefault(); }
-      }
-      if (key === 'Escape' && MultiGame.running) {
-        UI.toggleMultiPause();
       }
     },
 
@@ -2744,24 +2171,13 @@
 
       $('btn-play').addEventListener('click', () => {
         Audio.init(); Audio.resume(); Audio.click();
-        Screens.show('mode-select');
+        Screens.show('levels');
       });
       $('btn-settings').addEventListener('click', () => { Audio.click(); Screens.show('settings'); });
       $('btn-credits').addEventListener('click', () => { Audio.click(); Screens.show('credits'); });
-      $('btn-levels-back').addEventListener('click', () => { Audio.click(); Screens.show('mode-select'); });
+      $('btn-levels-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
       $('btn-settings-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
       $('btn-credits-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
-
-      // v2.1 §1 — Game Mode Selector
-      $('mode-select-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
-      $('mode-card-solo').addEventListener('click', () => { Audio.click(); Screens.show('levels'); });
-      $('mode-card-vs').addEventListener('click', () => { Audio.click(); this.openPlayerSetup('vs'); });
-      $('mode-card-team').addEventListener('click', () => { Audio.click(); this.openPlayerSetup('team'); });
-
-      // v2.1 §7 — Player Customization / setup screen
-      $('player-setup-back').addEventListener('click', () => { Audio.click(); Screens.show('mode-select'); });
-      $('btn-start-multiplayer').addEventListener('click', () => { Audio.click(); this.startMultiplayer(); });
-      this.wirePlayerSetupControls();
 
       // V1.3 — Shop / Achievements / Stats menu buttons
       $('btn-shop').addEventListener('click', () => { Audio.click(); this.renderShop(); Screens.show('shop'); });
@@ -2866,35 +2282,6 @@
         this.startGame(Game.difficulty);
       });
       $('btn-gameover-menu').addEventListener('click', () => this.goToMenu());
-
-      // v2.1 — multiplayer pause / winner / team-victory overlays
-      $('btn-multi-pause').addEventListener('click', () => this.toggleMultiPause());
-      $('btn-multi-resume').addEventListener('click', () => { Audio.click(); this.toggleMultiPause(); });
-      $('btn-multi-restart').addEventListener('click', () => {
-        Audio.click();
-        Screens.overlay('multi-pause', false);
-        MultiGame.start(MultiGame.mode);
-      });
-      $('btn-multi-pause-menu').addEventListener('click', () => this.goToMenu());
-
-      $('btn-vs-play-again').addEventListener('click', () => {
-        Audio.click();
-        Screens.overlay('vs-winner', false);
-        MultiGame.start(MultiGame.mode);
-      });
-      $('btn-vs-menu').addEventListener('click', () => this.goToMenu());
-
-      $('btn-team-play-again').addEventListener('click', () => {
-        Audio.click();
-        Screens.overlay('team-victory', false);
-        MultiGame.start(MultiGame.mode);
-      });
-      $('btn-team-menu').addEventListener('click', () => this.goToMenu());
-
-      // v2.1 §6 — quick emote buttons (one small cluster per player)
-      document.querySelectorAll('.emote-btn[data-player]').forEach((btn) => {
-        btn.addEventListener('click', () => this.sendEmote(btn.dataset.player, btn.dataset.emote));
-      });
     },
 
     updateSoundIcon() {
@@ -2943,61 +2330,6 @@
       }
     },
 
-    // ---------- v2.1 §1/§7 — Game Mode Selector & Player Customization ----------
-    pendingMultiMode: 'vs',
-    openPlayerSetup(mode) {
-      this.pendingMultiMode = mode;
-      $('player-setup-title').textContent = mode === 'vs' ? '🔴 VS Battle Setup' : '🔵 Team Adventure Setup';
-      this.refreshPlayerSetupUI();
-      Screens.show('player-setup');
-    },
-    refreshPlayerSetupUI() {
-      ['p1', 'p2'].forEach((who) => {
-        const prof = Storage.data.players[who];
-        const nameEl = $(`${who}-name-input`);
-        if (nameEl) nameEl.value = prof.name;
-        const skinSel = $(`${who}-skin-select`);
-        if (skinSel) {
-          skinSel.innerHTML = Object.keys(SKINS)
-            .filter((id) => Storage.data.unlockedSkins.includes(id))
-            .map((id) => `<option value="${id}" ${prof.skin === id ? 'selected' : ''}>${SKINS[id].name}</option>`).join('');
-        }
-        const petSel = $(`${who}-pet-select`);
-        if (petSel) {
-          petSel.innerHTML = Object.keys(PETS)
-            .filter((id) => Storage.data.unlockedPets.includes(id))
-            .map((id) => `<option value="${id}" ${prof.pet === id ? 'selected' : ''}>${PETS[id].name}</option>`).join('');
-        }
-      });
-    },
-    wirePlayerSetupControls() {
-      ['p1', 'p2'].forEach((who) => {
-        const nameEl = $(`${who}-name-input`);
-        if (nameEl) nameEl.addEventListener('change', (e) => Storage.setPlayerProfile(who, 'name', e.target.value.slice(0, 12) || (who === 'p1' ? 'Noah' : 'Dad')));
-        const skinSel = $(`${who}-skin-select`);
-        if (skinSel) skinSel.addEventListener('change', (e) => Storage.setPlayerProfile(who, 'skin', e.target.value));
-        const petSel = $(`${who}-pet-select`);
-        if (petSel) petSel.addEventListener('change', (e) => Storage.setPlayerProfile(who, 'pet', e.target.value));
-      });
-    },
-
-    startMultiplayer() {
-      Screens.show('multiplayer');
-      MultiGame.start(this.pendingMultiMode);
-      if (Storage.data.musicOn) setTimeout(() => Audio.startMusic('game'), 1900);
-    },
-    toggleMultiPause() {
-      if (!MultiGame.running) return;
-      const willPause = !MultiGame.paused;
-      Screens.overlay('multi-pause', willPause);
-      if (willPause) MultiGame.pause(); else MultiGame.resume();
-    },
-    sendEmote(who, text) {
-      if (!MultiGame.running) return;
-      MultiGame.showEmote(who, text);
-      Audio.click();
-    },
-
     togglePause() {
       if (!Game.running) return;
       const willPause = !Game.paused;
@@ -3032,12 +2364,8 @@
     goToMenu() {
       Audio.click();
       Game.stop();
-      MultiGame.stop(); // v2.1
       Screens.overlay('pause', false);
       Screens.overlay('gameover', false);
-      Screens.overlay('multi-pause', false); // v2.1
-      Screens.overlay('vs-winner', false); // v2.1
-      Screens.overlay('team-victory', false); // v2.1
       Game.updateHud();
       this.refreshProfile(); // Magic Forest Update
       Screens.show('menu');
@@ -3173,15 +2501,6 @@
           return `<span class="collectible-chip${complete ? ' complete' : ''}">${def.icon} ${count}/${def.setSize}</span>`;
         }).join('');
       }
-
-      // v2.1 §9 — Family Statistics
-      const fs = Storage.data.familyStats;
-      setText('fs-games-together', fs.gamesPlayedTogether);
-      setText('fs-vs-wins', `${fs.vsWins.p1} - ${fs.vsWins.p2} (${fs.vsWins.ties} ties)`);
-      setText('fs-team-wins', fs.teamWins);
-      setText('fs-longest-survival', `${fs.longestTeamSurvivalSec}s`);
-      setText('fs-fruits-together', fs.totalFruitsTogether);
-      setText('fs-coins-together', fs.totalCoinsTogether);
     },
 
     // ---------- v1.4 §1 — Mission Center ----------
@@ -3338,7 +2657,6 @@
   window.addEventListener('DOMContentLoaded', () => {
     FX.init();
     Game.init();
-    MultiGame.init(); // v2.1
     Input.init();
     UI.init();
     Screens.show('menu');
