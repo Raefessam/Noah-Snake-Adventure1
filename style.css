@@ -668,6 +668,27 @@ button {
   align-items: center;
   justify-content: center;
   z-index: 3;
+  animation: board-float 5s ease-in-out infinite; /* v2.2 §3 — slight floating effect */
+}
+@keyframes board-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+body.reduced-motion .canvas-wrap { animation: none; } /* respect existing reduced-motion setting */
+
+/* v2.2 §3 — tiny corner flowers around the board */
+.board-corner-flower {
+  position: absolute;
+  font-size: 20px;
+  z-index: 4;
+  pointer-events: none;
+  animation: corner-flower-sway 3.2s ease-in-out infinite;
+}
+.board-corner-flower-tl { top: -8px; left: -8px; }
+.board-corner-flower-br { bottom: -8px; right: -8px; animation-delay: -1.6s; }
+@keyframes corner-flower-sway {
+  0%, 100% { transform: rotate(-8deg); }
+  50% { transform: rotate(8deg); }
 }
 
 /* Magic Forest Update — brief "camera zoom" as the map appears at game start */
@@ -703,7 +724,8 @@ button {
 
 #game-canvas {
   border-radius: var(--radius-md);
-  box-shadow: 0 14px 34px rgba(0,0,0,0.3);
+  border: 3px solid rgba(255,255,255,0.6); /* v2.2 §3 — cleaner border */
+  box-shadow: 0 14px 34px rgba(0,0,0,0.3), 0 2px 0 rgba(255,255,255,0.4) inset; /* v2.2 §3 — layered shadow */
   background: #A9E38F;
   touch-action: none;
 }
@@ -971,6 +993,30 @@ button {
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  animation: shop-card-in 0.4s cubic-bezier(.34,1.56,.64,1) both; /* v2.2 §8 — staggered scale-in */
+}
+@keyframes shop-card-in {
+  0% { opacity: 0; transform: scale(0.8) translateY(8px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+/* v2.2 §8 — rarity tiers (cosmetic border/glow only, no gameplay meaning) */
+.shop-rarity-rare { border-color: #7FB8F0; box-shadow: 0 0 10px rgba(127,184,240,0.35); }
+.shop-rarity-epic { border-color: #B983FF; box-shadow: 0 0 12px rgba(185,131,255,0.4); }
+.shop-rarity-legendary { border-color: #FFD700; box-shadow: 0 0 14px rgba(255,215,0,0.5); animation: shop-card-in 0.4s cubic-bezier(.34,1.56,.64,1) both, legendary-glow 2s ease-in-out infinite; }
+@keyframes legendary-glow {
+  0%, 100% { box-shadow: 0 0 14px rgba(255,215,0,0.5); }
+  50% { box-shadow: 0 0 22px rgba(255,215,0,0.8); }
+}
+.shop-card-unlock { animation: shop-unlock-flash 0.6s ease; }
+@keyframes shop-unlock-flash {
+  0% { filter: brightness(1); }
+  40% { filter: brightness(1.6); }
+  100% { filter: brightness(1); }
+}
+.coin-shine { display: inline-block; animation: coin-shine-spin 2.4s ease-in-out infinite; }
+@keyframes coin-shine-spin {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(0.6); filter: brightness(1.3); }
 }
 .shop-preview {
   width: 48px;
@@ -1007,7 +1053,13 @@ button {
   opacity: 1;
   background: linear-gradient(135deg, #FFF6D6, #FFE9A8);
   border: 2px solid var(--gold);
+  animation: achievement-gold-shimmer 2.4s ease-in-out infinite; /* v2.2 §11 */
 }
+@keyframes achievement-gold-shimmer {
+  0%, 100% { box-shadow: 0 0 0 rgba(255,215,0,0); }
+  50% { box-shadow: 0 0 12px rgba(255,215,0,0.45); }
+}
+.achievement-item.locked-chain { filter: grayscale(0.4); } /* v2.2 §11 — locked items read as "chained away" */
 .achievement-icon { font-size: 26px; flex-shrink: 0; }
 .achievement-text { display: flex; flex-direction: column; flex: 1; }
 .achievement-text strong { color: var(--ink); font-size: 14px; }
@@ -1108,6 +1160,37 @@ button {
 
 /* §1 World Map / stage list */
 .stage-item.locked { opacity: 0.55; }
+
+/* v2.2 §12 — World Map path + pulse */
+.stage-path {
+  width: 4px;
+  height: 16px;
+  margin: 0 auto;
+  background: repeating-linear-gradient(180deg, #DCE8FA 0, #DCE8FA 4px, transparent 4px, transparent 8px);
+  border-radius: 2px;
+}
+.stage-path-done {
+  background: repeating-linear-gradient(180deg, #FFD700 0, #FFD700 4px, transparent 4px, transparent 8px);
+}
+.stage-item.stage-next {
+  animation: stage-pulse 1.6s ease-in-out infinite;
+  border: 2px solid #FFD700;
+}
+@keyframes stage-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,215,0,0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(255,215,0,0); }
+}
+.stage-flag { display: inline-block; }
+.stage-item.stage-next .stage-flag { animation: stage-flag-wave 1.2s ease-in-out infinite; }
+@keyframes stage-flag-wave {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-8deg); }
+}
+.stage-item.stage-cleared .mission-state { animation: stage-star-twinkle 1.8s ease-in-out infinite; }
+@keyframes stage-star-twinkle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.15); }
+}
 
 /* §9 Tutorial text */
 .tutorial-text {
@@ -1316,14 +1399,38 @@ body.high-contrast .overlay-card {
   align-items: center;
   gap: 2px;
   opacity: 0.5;
+  position: relative;
+  overflow: hidden;
+}
+/* v2.2 §10 — soft "fog" over undiscovered entries */
+.collection-cell:not(.unlocked)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(255,255,255,0.5) 0%, rgba(200,210,230,0.35) 100%);
+  backdrop-filter: blur(1px);
+}
+.collection-cell:not(.unlocked) .collection-icon {
+  position: relative;
+  animation: fog-question-pulse 2.4s ease-in-out infinite;
+}
+@keyframes fog-question-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 .collection-cell.unlocked {
   opacity: 1;
   background: linear-gradient(135deg, #FFF6D6, #FFE9A8);
   border: 1px solid var(--gold);
+  animation: collection-unlock-pop 0.4s cubic-bezier(.34,1.56,.64,1); /* v2.2 §10 */
 }
-.collection-icon { font-size: 20px; }
-.collection-name { font-size: 9px; font-weight: 700; color: var(--ink); text-align: center; }
+@keyframes collection-unlock-pop {
+  0% { transform: scale(0.85); }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+.collection-icon { font-size: 20px; position: relative; }
+.collection-name { font-size: 9px; font-weight: 700; color: var(--ink); text-align: center; position: relative; }
 
 /* =========================================================
    REDUCED MOTION

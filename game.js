@@ -1349,6 +1349,9 @@
             this.xpThisGame += m.reward.xp;
             Audio.achievement();
             FX.confetti(70, ['#FFD700', '#6FE08A', '#FFFFFF']);
+            FX.starBurst(18); // v2.2 §9 — extra star burst for mission celebrations
+            const rect = this.canvas.getBoundingClientRect();
+            FX.floatText(rect.left + rect.width / 2, rect.top + rect.height * 0.4, `+${m.reward.xp} XP`, '#7FE0D9'); // v2.2 §9 — flying XP popup
             const banner = $('mission-banner');
             if (banner) {
               banner.innerHTML = `🎯 Mission Complete! <br> ${m.title} <br> +${m.reward.coins}🪙 +${m.reward.xp}XP`;
@@ -1867,6 +1870,18 @@
       ctx.globalAlpha = 0.5 + 0.5 * appear;
       ctx.fillText(f.emoji, 0, 0);
       ctx.restore();
+
+      // v2.2 §5 — a small twinkling shine near the fruit, for a "polished" look
+      const shineTwinkle = 0.4 + Math.sin(f.bounce * 1.7) * 0.35;
+      if (shineTwinkle > 0.5) {
+        ctx.save();
+        ctx.globalAlpha = clamp(shineTwinkle, 0, 0.85) * appear;
+        ctx.font = `${this.cell * 0.32}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('✨', cx + this.cell * 0.28, cy - this.cell * 0.28);
+        ctx.restore();
+      }
     },
 
     drawSnake(ctx) {
@@ -2005,6 +2020,29 @@
       ctx.arc(this.cell * 0.06, this.cell * 0.05, this.cell * 0.14, -0.25, 0.85);
       ctx.stroke();
       ctx.restore();
+
+      // v2.2 §4 — occasional tongue flick, in front of the mouth
+      const tongueCycle = performance.now() % 4200;
+      if (tongueCycle < 260) {
+        const flick = Math.sin((tongueCycle / 260) * Math.PI); // 0 -> 1 -> 0, quick in-and-out
+        const tongueLen = this.cell * 0.32 * flick;
+        const baseX = this.cell * 0.42, baseY = 0;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.strokeStyle = '#E0344C';
+        ctx.lineWidth = Math.max(1, this.cell * 0.03);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(baseX, baseY);
+        ctx.lineTo(baseX + tongueLen, baseY);
+        ctx.moveTo(baseX + tongueLen, baseY);
+        ctx.lineTo(baseX + tongueLen + this.cell * 0.08, baseY - this.cell * 0.06);
+        ctx.moveTo(baseX + tongueLen, baseY);
+        ctx.lineTo(baseX + tongueLen + this.cell * 0.08, baseY + this.cell * 0.06);
+        ctx.stroke();
+        ctx.restore();
+      }
     },
 
     // Visual Evolution — briefly "pop" a HUD pill when its number changes,
@@ -2339,11 +2377,15 @@
 
     showGameOver() {
       Game.stop();
-      $('final-score').textContent = Game.score;
+      this.animateCountUp('final-score', Game.score); // v2.2 §13 — animated count-up instead of an instant number
       $('final-best').textContent = Storage.data.highScore;
       const isRecord = Game.score > 0 && Game.score >= Storage.data.highScore;
       $('new-record-msg').classList.toggle('show', isRecord);
-      if (isRecord) { FX.confetti(140); Audio.victory(); }
+      if (isRecord) {
+        FX.confetti(140);
+        Audio.victory();
+        setTimeout(() => FX.confetti(90, ['#FFD700', '#FFF6C9', '#FF6F61', '#7FB8F0']), 260); // v2.2 §13 — a second "fireworks" burst
+      }
 
       // Magic Forest Update — richer Game Over summary
       const setText = (id, val) => { const el = $(id); if (el) el.textContent = val; };
@@ -2359,6 +2401,24 @@
       setText('final-missions', Math.max(0, missionsNow - Game.missionsAtStart));
 
       Screens.overlay('gameover', true);
+    },
+
+    // v2.2 §13 — a small, self-terminating count-up animation (no persistent loop/timer;
+    // it stops itself once it reaches the target, so there's no leak risk).
+    animateCountUp(elementId, target) {
+      const el = $(elementId);
+      if (!el) return;
+      if (!target || target <= 0) { el.textContent = target || 0; return; }
+      const duration = clamp(target * 2, 300, 900); // scales gently with score size, capped
+      const start = performance.now();
+      const step = (now) => {
+        const t = clamp((now - start) / duration, 0, 1);
+        const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+        el.textContent = Math.round(target * eased);
+        if (t < 1) requestAnimationFrame(step);
+        else el.textContent = target;
+      };
+      requestAnimationFrame(step);
     },
 
     goToMenu() {
@@ -2377,19 +2437,22 @@
       const grid = $('shop-grid');
       if (!grid) return;
       grid.innerHTML = '';
-      Object.keys(SKINS).forEach((id) => {
+      Object.keys(SKINS).forEach((id, index) => {
         const skin = SKINS[id];
         const owned = Storage.data.unlockedSkins.includes(id);
         const equipped = Storage.data.currentSkin === id;
         const card = document.createElement('div');
-        card.className = 'shop-card';
+        // v2.2 §8 — rarity tier by cost, purely cosmetic (border/glow color)
+        const rarity = skin.cost === 0 ? 'common' : skin.cost < 100 ? 'rare' : skin.cost < 250 ? 'epic' : 'legendary';
+        card.className = `shop-card shop-rarity-${rarity}`;
+        card.style.animationDelay = `${index * 0.06}s`; // staggered scale-in
         const preview = skin.rainbow
           ? 'linear-gradient(90deg, #FF6F61, #FFD93D, #6FE08A, #7FB8F0, #B983FF)'
           : `linear-gradient(160deg, ${skin.headColor}, ${skin.bodyColor})`;
         card.innerHTML = `
           <div class="shop-preview" style="background:${preview}"></div>
           <span class="shop-skin-name">${skin.name}</span>
-          <span class="shop-skin-cost">${skin.cost === 0 ? 'Free' : `🪙 ${skin.cost}`}</span>
+          <span class="shop-skin-cost">${skin.cost === 0 ? 'Free' : `<span class="coin-shine">🪙</span> ${skin.cost}`}</span>
           <button class="btn ${equipped ? 'btn-secondary' : 'btn-primary'} shop-action">
             ${equipped ? '✔️ Equipped' : (owned ? 'Equip' : 'Buy')}
           </button>
@@ -2403,6 +2466,7 @@
             Storage.unlockSkin(id);
             Storage.set('currentSkin', id);
             FX.confetti(60);
+            card.classList.add('shop-card-unlock'); // v2.2 §8 — brief unlock flash
           } else {
             return; // not enough coins — silently no-op, balance shown updates nothing
           }
@@ -2417,16 +2481,18 @@
       const petGrid = $('pet-shop-grid');
       if (petGrid) {
         petGrid.innerHTML = '';
-        Object.keys(PETS).forEach((id) => {
+        Object.keys(PETS).forEach((id, index) => {
           const pet = PETS[id];
           const owned = Storage.data.unlockedPets.includes(id);
           const equipped = Storage.data.currentPet === id;
           const card = document.createElement('div');
-          card.className = 'shop-card';
+          const rarity = pet.cost === 0 ? 'common' : pet.cost < 100 ? 'rare' : pet.cost < 250 ? 'epic' : 'legendary';
+          card.className = `shop-card shop-rarity-${rarity}`;
+          card.style.animationDelay = `${index * 0.06}s`;
           card.innerHTML = `
             <div class="shop-preview pet-preview">${pet.icon}</div>
             <span class="shop-skin-name">${pet.name}</span>
-            <span class="shop-skin-cost">${pet.cost === 0 ? 'Free' : `🪙 ${pet.cost}`}</span>
+            <span class="shop-skin-cost">${pet.cost === 0 ? 'Free' : `<span class="coin-shine">🪙</span> ${pet.cost}`}</span>
             <button class="btn ${equipped ? 'btn-secondary' : 'btn-primary'} shop-action">
               ${equipped ? '✔️ Following' : (owned ? 'Choose' : 'Adopt')}
             </button>
@@ -2458,11 +2524,11 @@
       ACHIEVEMENTS.forEach((a) => {
         const done = a.done(Storage.data);
         const item = document.createElement('div');
-        item.className = 'achievement-item' + (done ? ' done' : '');
+        item.className = 'achievement-item' + (done ? ' done' : ' locked-chain'); // v2.2 §11
         item.innerHTML = `
           <span class="achievement-icon">${done ? a.icon : '🔒'}</span>
           <span class="achievement-text">
-            <strong>${a.title}</strong>
+            <strong>${done ? a.title : '⛓️ ' + a.title}</strong>
             <small>${a.desc}</small>
           </span>
           <span class="achievement-state">${done ? '✅' : ''}</span>
@@ -2566,22 +2632,37 @@
       if (!list) return;
       list.innerHTML = '';
       const highestLevel = Storage.data.stats.highestLevel;
+      // v2.2 §12 — find the first not-yet-cleared unlocked stage, to give it a "next up" pulse
+      let nextStageIndex = -1;
       STAGES.forEach((s, i) => {
         const unlocked = highestLevel >= s.levelRequired || i === 0;
         const cleared = highestLevel > s.levelRequired || (i === 0 && highestLevel >= s.levelRequired);
+        if (unlocked && !cleared && nextStageIndex === -1) nextStageIndex = i;
+      });
+
+      STAGES.forEach((s, i) => {
+        const unlocked = highestLevel >= s.levelRequired || i === 0;
+        const cleared = highestLevel > s.levelRequired || (i === 0 && highestLevel >= s.levelRequired);
+        const isNext = i === nextStageIndex;
         const item = document.createElement('div');
-        item.className = 'mission-item stage-item' + (unlocked ? '' : ' locked');
+        item.className = 'mission-item stage-item' + (unlocked ? '' : ' locked') + (isNext ? ' stage-next' : '') + (cleared ? ' stage-cleared' : '');
         item.innerHTML = `
           <div class="mission-row">
-            <span class="mission-icon">${unlocked ? s.icon : '🔒'}</span>
+            <span class="mission-icon stage-flag">${unlocked ? s.icon : '🔒'}</span>
             <span class="mission-text">
               <strong>${s.name}</strong>
               <small>${unlocked ? (cleared ? 'Cleared!' : 'Reach Level ' + s.levelRequired + ' to clear') : 'Reach Level ' + s.levelRequired + ' to unlock'}</small>
             </span>
-            <span class="mission-state">${cleared ? '✅' : (unlocked ? '▶️' : '')}</span>
+            <span class="mission-state">${cleared ? '⭐' : (unlocked ? '🚩' : '')}</span>
           </div>
         `;
         list.appendChild(item);
+        // v2.2 §12 — a connecting path between this stage and the next one
+        if (i < STAGES.length - 1) {
+          const path = document.createElement('div');
+          path.className = 'stage-path' + (cleared ? ' stage-path-done' : '');
+          list.appendChild(path);
+        }
       });
     },
 
