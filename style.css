@@ -290,6 +290,24 @@ button {
   50% { opacity: 0.9; transform: scale(1.1); }
 }
 
+/* v1.4 §4 — friendly NPC animals wandering the background */
+.npc-animal {
+  position: absolute;
+  bottom: 14%;
+  font-size: 22px;
+  animation: npc-wander 20s ease-in-out infinite;
+  opacity: 0.9;
+}
+.npc-rabbit { left: 10%; animation-duration: 16s; }
+.npc-fox { left: 55%; animation-duration: 22s; animation-delay: -6s; }
+.npc-squirrel { left: 78%; bottom: 16%; font-size: 18px; animation-duration: 14s; animation-delay: -3s; }
+@keyframes npc-wander {
+  0%, 100% { transform: translateX(0) scaleX(1); }
+  45% { transform: translateX(60px) scaleX(1); }
+  50% { transform: translateX(60px) scaleX(-1); }
+  95% { transform: translateX(0) scaleX(-1); }
+}
+
 /* =========================================================
    SCREENS
    ========================================================= */
@@ -610,6 +628,38 @@ button {
 }
 .hud-pill span { display: inline-block; }
 
+/* v1.4 — combo pill, only visible while a combo streak is active */
+.hud-combo-pill {
+  display: none;
+  background: linear-gradient(135deg, #FFD6A8, #FF6F61);
+  color: #fff;
+}
+.hud-combo-pill.show { display: inline-flex; }
+
+/* v1.4 — active power-up chip strip */
+.hud-powerups {
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+}
+.powerup-chip {
+  background: rgba(255,255,255,0.6);
+  backdrop-filter: blur(6px);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  box-shadow: 0 3px 8px rgba(35,64,90,0.18);
+  animation: powerup-chip-pulse 1.2s ease-in-out infinite;
+}
+@keyframes powerup-chip-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
 .canvas-wrap {
   position: relative;
   width: 100%;
@@ -744,6 +794,45 @@ button {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* v1.4 §1 — mission-complete banner (same calm gold-glow language, lower position) */
+.mission-banner {
+  position: absolute;
+  top: 34%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  z-index: 8;
+  font-family: var(--font-display);
+  font-size: clamp(14px, 3.6vw, 22px);
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #DFF7E0, #6FE08A);
+  color: var(--ink);
+  text-align: center;
+  line-height: 1.3;
+  text-shadow: 0 2px 3px rgba(255,255,255,0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.mission-banner.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* v1.4 §5 — world event banner (e.g. a passing rainbow) */
+.worldevent-banner {
+  position: absolute;
+  top: 6%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  font-size: 34px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1s ease;
+}
+.worldevent-banner.show { opacity: 0.9; }
 
 .touch-controls {
   position: absolute;
@@ -902,6 +991,51 @@ button {
 .achievement-text strong { color: var(--ink); font-size: 14px; }
 .achievement-text small { color: #6E8399; font-size: 11px; }
 .achievement-state { font-size: 18px; }
+
+/* =========================================================
+   V1.4 §1 — MISSION CENTER
+   ========================================================= */
+.mission-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  max-height: 55vh;
+  overflow-y: auto;
+  text-align: left;
+}
+.mission-item {
+  background: #F1F6FF;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+}
+.mission-item.done {
+  background: linear-gradient(135deg, #DFF7E0, #B9F0C4);
+  border: 2px solid #6FE08A;
+}
+.mission-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.mission-icon { font-size: 24px; flex-shrink: 0; }
+.mission-text { display: flex; flex-direction: column; flex: 1; }
+.mission-text strong { color: var(--ink); font-size: 14px; }
+.mission-text small { color: #6E8399; font-size: 11px; }
+.mission-state { font-size: 12px; font-weight: 800; color: var(--ink); }
+.mission-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(35,64,90,0.12);
+  overflow: hidden;
+}
+.mission-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #6FE08A, #3EA55D);
+  transition: width 0.4s ease;
+}
 
 /* =========================================================
    V1.3 §4 — DAILY REWARD

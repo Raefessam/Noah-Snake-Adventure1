@@ -48,6 +48,10 @@
       <div class="sparkle sparkle-1">✨</div>
       <div class="sparkle sparkle-2">✨</div>
       <div class="sparkle sparkle-3">✨</div>
+      <!-- v1.4 — friendly NPC animals, purely decorative, never block gameplay -->
+      <div class="npc-animal npc-rabbit">🐇</div>
+      <div class="npc-animal npc-fox">🦊</div>
+      <div class="npc-animal npc-squirrel">🐿️</div>
     </div>
 
     <!-- ============ MAIN MENU SCREEN ============ -->
@@ -85,6 +89,9 @@
           </button>
           <button id="btn-shop" class="btn btn-secondary">
             <span class="btn-icon">🛍️</span> Snake Shop
+          </button>
+          <button id="btn-missions" class="btn btn-secondary">
+            <span class="btn-icon">🗺️</span> Missions
           </button>
           <button id="btn-achievements" class="btn btn-secondary">
             <span class="btn-icon">🏆</span> Achievements
@@ -209,7 +216,19 @@
         <div class="settings-row"><span class="settings-label">🎖️ Highest Level</span><strong id="stat-highest-level">1</strong></div>
         <div class="settings-row"><span class="settings-label">🍓 Favorite Fruit</span><strong id="stat-favorite-fruit">—</strong></div>
         <div class="settings-row"><span class="settings-label">⏱️ Time Played</span><strong id="stat-time-played">0m 0s</strong></div>
+        <!-- v1.4 additions -->
+        <div class="settings-row"><span class="settings-label">💫 Total XP</span><strong id="stat-xp">0</strong></div>
+        <div class="settings-row"><span class="settings-label">🏅 Achievements</span><strong id="stat-achievements-done">0 / 0</strong></div>
         <button id="btn-stats-back" class="btn btn-secondary" style="margin-top:14px;">⬅️ Back</button>
+      </div>
+    </section>
+
+    <!-- ============ V1.4: MISSION CENTER SCREEN ============ -->
+    <section id="screen-missions" class="screen">
+      <div class="menu-card">
+        <h2 class="panel-title">🗺️ Mission Center</h2>
+        <div class="mission-list" id="missions-list"><!-- filled in by game.js --></div>
+        <button id="btn-missions-back" class="btn btn-secondary">⬅️ Back</button>
       </div>
     </section>
 
@@ -220,6 +239,10 @@
         <div class="hud-pill">🏆 <span id="hud-best">0</span></div>
         <div class="hud-pill">🎖️ Lv.<span id="hud-level">1</span></div>
         <div class="hud-pill">🪙 <span id="hud-coins">0</span></div>
+        <!-- v1.4 — combo pill, hidden unless a combo is active -->
+        <div class="hud-pill hud-combo-pill" id="hud-combo-pill">🔥 x<span id="hud-combo">2</span></div>
+        <!-- v1.4 — active power-up icon strip -->
+        <div class="hud-powerups" id="hud-powerups"></div>
         <button id="btn-pause" class="hud-btn" aria-label="Pause">⏸️</button>
       </div>
 
@@ -233,6 +256,10 @@
         <div id="milestone-banner" class="milestone-banner">⭐ AMAZING NOAH ⭐</div>
         <!-- V1.3: level-up celebration banner -->
         <div id="levelup-banner" class="levelup-banner">🌟 LEVEL UP!</div>
+        <!-- v1.4 §1: mission-complete banner -->
+        <div id="mission-banner" class="mission-banner">🎯 Mission Complete!</div>
+        <!-- v1.4 §5: world event banner (e.g. rainbow) -->
+        <div id="worldevent-banner" class="worldevent-banner">🌈</div>
       </div>
 
       <!-- Touch controls (shown on touch devices) -->
@@ -283,6 +310,17 @@
           <div class="score-box">
             <span class="score-label">🎖️ New</span>
             <span id="final-achievements" class="score-value">0</span>
+          </div>
+        </div>
+        <!-- v1.4 — XP earned and missions completed this round -->
+        <div class="gameover-scores">
+          <div class="score-box">
+            <span class="score-label">💫 XP Earned</span>
+            <span id="final-xp" class="score-value">0</span>
+          </div>
+          <div class="score-box">
+            <span class="score-label">🗺️ Missions</span>
+            <span id="final-missions" class="score-value">0</span>
           </div>
         </div>
         <p id="new-record-msg" class="new-record">🌟 New Record! 🌟</p>

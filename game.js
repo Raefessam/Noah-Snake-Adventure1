@@ -46,6 +46,9 @@
       currentSkin: 'green',
       lastDailyReward: 0,
       streak: 0, // Magic Forest Update — consecutive daily-reward days
+      xp: 0, // v1.4 — Adventure Expansion: separate XP pool
+      completedMissions: [], // v1.4 — mission ids already claimed (one-time rewards)
+      bestCombo: 0, // v1.4 — highest combo streak ever reached
       stats: {
         gamesPlayed: 0,
         totalFruits: 0,
@@ -66,6 +69,7 @@
         this.data.stats = { ...this.defaults.stats, ...(parsed.stats || {}) };
         if (!Array.isArray(this.data.unlockedSkins)) this.data.unlockedSkins = ['green'];
         if (!this.data.unlockedSkins.includes('green')) this.data.unlockedSkins.push('green');
+        if (!Array.isArray(this.data.completedMissions)) this.data.completedMissions = [];
       } catch (e) {
         this.data = { ...this.defaults, stats: { ...this.defaults.stats } };
       }
@@ -123,6 +127,26 @@
     addPlayTime(seconds) {
       this.data.stats.timePlayed += seconds;
       this.save();
+    },
+
+    // ---------- v1.4 helpers ----------
+    addXp(amount) {
+      this.data.xp += amount;
+      this.save();
+    },
+    completeMission(id) {
+      if (!this.data.completedMissions.includes(id)) {
+        this.data.completedMissions.push(id);
+        this.save();
+        return true; // newly completed
+      }
+      return false; // already claimed before
+    },
+    recordCombo(comboCount) {
+      if (comboCount > this.data.bestCombo) {
+        this.data.bestCombo = comboCount;
+        this.save();
+      }
     }
   };
   Storage.load();
@@ -181,6 +205,13 @@
       [783.99, 987.77, 1174.66, 1567.98].forEach((f, i) =>
         this.tone(f, 0.16, { type: 'triangle', volume: 0.2, delay: i * 0.08 })
       );
+    },
+
+    // v1.4 §7 — combo callout, pitch rises a little with each threshold
+    combo(comboCount) {
+      const base = 700 + Math.min(comboCount, 10) * 40;
+      this.tone(base, 0.1, { type: 'square', volume: 0.22 });
+      this.tone(base * 1.5, 0.14, { type: 'square', volume: 0.18, delay: 0.06 });
     },
 
     eat() {
@@ -246,7 +277,7 @@
      (pause, game over).
      =========================================================== */
   const Screens = {
-    all: ['menu', 'levels', 'settings', 'credits', 'game', 'shop', 'achievements', 'stats'],
+    all: ['menu', 'levels', 'settings', 'credits', 'game', 'shop', 'achievements', 'stats', 'missions'],
     show(name) {
       this.all.forEach((s) => $(`screen-${s}`).classList.toggle('active', s === name));
     },
@@ -410,6 +441,35 @@
     el.classList.add('flash');
   };
 
+  /* ===========================================================
+     V1.4 §5 — WORLD EVENTS
+     Random, purely-decorative background flourishes during gameplay.
+     Triggered occasionally from the existing game tick — no extra
+     timers/loops are created.
+     =========================================================== */
+  const WorldEvents = {
+    types: ['rainbow', 'shootingStar', 'petals', 'wind'],
+    trigger() {
+      if (Storage.data.reducedMotion) return; // keep things calm if the player prefers less motion
+      const type = this.types[randInt(0, this.types.length - 1)];
+      const banner = $('worldevent-banner');
+      switch (type) {
+        case 'rainbow':
+          if (banner) { banner.textContent = '🌈'; banner.classList.add('show'); setTimeout(() => banner.classList.remove('show'), 4000); }
+          break;
+        case 'shootingStar':
+          FX.starBurst(4);
+          break;
+        case 'petals':
+          FX.confetti(8, ['#FFAFCC', '#FFD1F5', '#FFFFFF']);
+          break;
+        case 'wind':
+          FX.confetti(6, ['#E4EFFF', '#FFFFFF']);
+          break;
+      }
+    }
+  };
+
   const Milestone = {
     timer: null,
     show() {
@@ -536,6 +596,42 @@
   ];
 
   /* ===========================================================
+     V1.4 §1 — ADVENTURE MISSIONS
+     One-time missions (like achievements, but with an explicit
+     coin+XP reward paid out the moment they're first completed).
+     Progress is computed live from Storage/session data.
+     =========================================================== */
+  const MISSIONS = [
+    { id: 'm_fruits15', icon: '🍎', title: 'Collect 15 Fruits', reward: { coins: 15, xp: 30 },
+      target: 15, progress: (d) => d.stats.totalFruits },
+    { id: 'm_score3000', icon: '⭐', title: 'Reach 3000 Score', reward: { coins: 25, xp: 50 },
+      target: 3000, progress: (d) => d.highScore },
+    { id: 'm_coins10', icon: '🪙', title: 'Collect 10 Coins', reward: { coins: 10, xp: 20 },
+      target: 10, progress: (d) => d.stats.totalCoinsEarned },
+    { id: 'm_games3', icon: '🎮', title: 'Play 3 Games', reward: { coins: 15, xp: 25 },
+      target: 3, progress: (d) => d.stats.gamesPlayed },
+    { id: 'm_skin1', icon: '🛍️', title: 'Unlock One Skin', reward: { coins: 20, xp: 40 },
+      target: 1, progress: (d) => Math.max(0, d.unlockedSkins.length - 1) },
+    { id: 'm_world1', icon: '🌟', title: 'Complete a World', reward: { coins: 50, xp: 100 },
+      target: 5, progress: (d) => d.stats.highestLevel }
+  ];
+
+  /* ===========================================================
+     V1.4 §2 — POWER-UPS
+     Spawn like a coin, picked up on contact, apply a timed effect.
+     Effects are handled directly in the Game tick/render logic.
+     =========================================================== */
+  const POWERUPS = {
+    magnet:   { icon: '🧲', name: 'Magnet',       color: '#B983FF', duration: 8000 },
+    shield:   { icon: '🛡️', name: 'Shield',       color: '#7FB8F0', duration: 10000 },
+    double:   { icon: '✨', name: 'Double Score', color: '#FFD700', duration: 8000 },
+    freeze:   { icon: '❄️', name: 'Freeze Time',  color: '#8ED1FC', duration: 5000 },
+    radar:    { icon: '📡', name: 'Fruit Radar',  color: '#6FE08A', duration: 8000 },
+    tiny:     { icon: '🔬', name: 'Tiny Snake',   color: '#FF6F91', duration: 8000 }
+  };
+  const POWERUP_KEYS = Object.keys(POWERUPS);
+
+  /* ===========================================================
      6. THE GAME  (Snake + Food + Loop)
      =========================================================== */
   // V1.2 — Better Food System: 6 fruits, each with its own point
@@ -576,6 +672,7 @@
     score: 0,
     difficulty: 'normal',
     stepMs: 130,
+    effectiveStepMs: 130, // v1.4 — tracks Freeze Time adjusted pace for interpolation
     acc: 0, lastTime: 0,
     running: false, paused: false,
     rafId: null,
@@ -590,6 +687,20 @@
     coinsThisGame: 0, // Magic Forest Update — for the improved Game Over screen
     achievementsAtStart: 0, // snapshot to detect newly-unlocked achievements
     lastAchievementCount: 0, // Visual Evolution — for live achievement-sound feedback
+
+    // ---------- v1.4 Adventure Expansion state ----------
+    powerup: null,           // { type, x, y, bounce } or null — spawns like a coin
+    activePowerups: {},      // { magnet: expiresAtMs, shield: expiresAtMs, ... }
+    chest: null,             // { x, y, bounce } or null — mystery chest on the board
+    giantFruit: null,        // { x, y, points, expiresAtMs, ...foodProps } or null — mini-boss
+    foodsSincePowerup: 0,
+    foodsSinceChest: 0,
+    foodsSinceGiant: 0,
+    combo: 0,                // current combo count
+    comboTimer: 0,           // ms remaining before combo resets
+    xpThisGame: 0,
+    missionsAtStart: 0,      // snapshot for the improved end screen
+    worldEventTimer: 0,      // ms until the next lightweight background world event
 
     init() {
       this.canvas = $('game-canvas');
@@ -629,6 +740,19 @@
       this.coinsThisGame = 0;
       this.achievementsAtStart = ACHIEVEMENTS.filter((a) => a.done(Storage.data)).length;
       this.lastAchievementCount = this.achievementsAtStart;
+      // v1.4 resets
+      this.powerup = null;
+      this.activePowerups = {};
+      this.chest = null;
+      this.giantFruit = null;
+      this.foodsSincePowerup = 0;
+      this.foodsSinceChest = 0;
+      this.foodsSinceGiant = 0;
+      this.combo = 0;
+      this.comboTimer = 0;
+      this.xpThisGame = 0;
+      this.missionsAtStart = MISSIONS.filter((m) => Storage.data.completedMissions.includes(m.id)).length;
+      this.worldEventTimer = 8000 + Math.random() * 6000;
       this.secretMode = false;
       this.secretBuffer = '';
       $('secret-banner').classList.remove('show');
@@ -698,10 +822,15 @@
       this.lastTime = time;
       if (this.paused) return;
 
+      // v1.4 — Freeze Time power-up: snake moves at half speed while active,
+      // without touching the underlying difficulty stepMs.
+      const effectiveStepMs = this.activePowerups.freeze ? this.stepMs * 1.8 : this.stepMs;
+      this.effectiveStepMs = effectiveStepMs; // used by drawSnake() for accurate interpolation
+
       this.acc += delta;
-      while (this.acc >= this.stepMs) {
+      while (this.acc >= effectiveStepMs) {
         this.tick();
-        this.acc -= this.stepMs;
+        this.acc -= effectiveStepMs;
       }
       this.render();
     },
@@ -709,6 +838,24 @@
     tick() {
       this.sessionSeconds += this.stepMs / 1000; // V1.3 §6 — playtime tracking
       this.prevSnake = this.snake.map((s) => ({ x: s.x, y: s.y })); // Visual Evolution
+
+      // v1.4 — tick down combo window, active power-ups, and the giant-fruit timer
+      if (this.comboTimer > 0) {
+        this.comboTimer -= this.stepMs;
+        if (this.comboTimer <= 0) { this.combo = 0; this.updateHud(); }
+      }
+      const now = Date.now();
+      let powerupExpired = false;
+      Object.keys(this.activePowerups).forEach((k) => {
+        if (this.activePowerups[k] <= now) { delete this.activePowerups[k]; powerupExpired = true; }
+      });
+      if (powerupExpired) this.updateHud();
+      if (this.giantFruit && now > this.giantFruit.expiresAt) this.giantFruit = null;
+      this.worldEventTimer -= this.stepMs;
+      if (this.worldEventTimer <= 0) {
+        WorldEvents.trigger();
+        this.worldEventTimer = 10000 + Math.random() * 8000;
+      }
 
       this.dir = this.nextDir;
       const head = this.snake[0];
@@ -720,12 +867,40 @@
       newHead.x = (newHead.x + GRID_SIZE) % GRID_SIZE;
       newHead.y = (newHead.y + GRID_SIZE) % GRID_SIZE;
 
-      // Self collision
+      // Self collision — a v1.4 Shield power-up absorbs one hit instead of ending the game
       if (this.snake.some((s) => s.x === newHead.x && s.y === newHead.y)) {
+        if (this.activePowerups.shield) {
+          delete this.activePowerups.shield;
+          this.shakeFrames = 8;
+          Audio.click();
+          FX.confetti(30, ['#7FB8F0', '#FFFFFF']);
+          return; // shield absorbed the hit — skip this move, try again next tick
+        }
         return this.endGame();
       }
 
       this.snake.unshift(newHead);
+
+      // v1.4 §2/§3/§6 — power-up / mystery chest / giant fruit collisions
+      if (this.powerup && newHead.x === this.powerup.x && newHead.y === this.powerup.y) {
+        this.collectPowerup();
+      }
+      if (this.chest && newHead.x === this.chest.x && newHead.y === this.chest.y) {
+        this.openChest();
+      }
+      if (this.giantFruit && newHead.x === this.giantFruit.x && newHead.y === this.giantFruit.y) {
+        this.eatGiantFruit();
+        return; // eatGiantFruit already handles unshift/pop bookkeeping
+      }
+
+      // V1.4 §2 — Magnet gently pulls the current fruit toward the snake's head
+      if (this.activePowerups.magnet && this.food) {
+        const dxf = this.food.x - newHead.x, dyf = this.food.y - newHead.y;
+        if (Math.abs(dxf) + Math.abs(dyf) <= 4 && Math.abs(dxf) + Math.abs(dyf) > 1) {
+          this.food.x -= Math.sign(dxf);
+          this.food.y -= Math.sign(dyf);
+        }
+      }
 
       // V1.3 §2 — coin collision (checked separately from food)
       if (this.coin && newHead.x === this.coin.x && newHead.y === this.coin.y) {
@@ -740,14 +915,33 @@
     },
 
     eatFood() {
-      const points = this.food.points || 100;
+      let points = this.food.points || 100;
       const eatenName = this.food.name || 'apple';
       const previousScore = this.score;
-      this.score += points; // V1.2 — each fruit is worth its own point value
+
+      // v1.4 §7 — Combo system: eating fruit within the combo window builds a streak
+      this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
+      this.comboTimer = 2500;
+      Storage.recordCombo(this.combo);
+      let comboBonus = 0;
+      if (this.combo >= 2) {
+        comboBonus = Math.round(points * 0.1 * Math.min(this.combo, 5));
+        points += comboBonus;
+      }
+      // v1.4 §2 — Double Score power-up
+      if (this.activePowerups.double) points *= 2;
+
+      this.score += points;
       this.foodsEaten++;
       this.glowFrames = 10;
       Audio.eatFruit(this.food.pitch || 660);
       Storage.recordFruit(eatenName); // V1.3 §6
+
+      // v1.4 §8 — XP gain (independent of score)
+      const xpGain = 5 + Math.round((this.food.points || 100) / 50);
+      this.xpThisGame += xpGain;
+      Storage.addXp(xpGain);
+
       this.updateHud();
 
       // Screen-space position of the food for particle/floater placement
@@ -758,7 +952,16 @@
       FX.floatText(px, py, `+${points}`, this.food.color);
       FX.starBurst(6); // Visual Evolution — tiny star burst on every fruit
       if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) { /* unsupported */ } }
+
+      // v1.4 §7 — combo callouts at x2/x3/x5+
+      if (this.combo === 2 || this.combo === 3 || this.combo === 5 || (this.combo > 5 && this.combo % 5 === 0)) {
+        Audio.combo(this.combo);
+        FX.floatText(px, py - 26, `Combo x${this.combo}!`, '#FF6F61');
+        FX.starBurst(this.combo * 3);
+      }
+
       this.checkNewAchievements(); // Visual Evolution §11
+      this.checkNewMissions(); // v1.4 §1
 
       // Level-up celebration every 5 fruits (based on fruit count, not points)
       if (this.foodsEaten % 5 === 0) {
@@ -781,6 +984,9 @@
 
       this.placeFood();
       this.maybeSpawnCoin(); // V1.3 §2
+      this.maybeSpawnPowerup(); // v1.4 §2
+      this.maybeSpawnChest(); // v1.4 §3
+      this.maybeSpawnGiantFruit(); // v1.4 §6
 
       const best = Math.max(Storage.data.highScore, this.score);
       if (best > Storage.data.highScore) Storage.set('highScore', best);
@@ -827,6 +1033,166 @@
       this.lastAchievementCount = count;
     },
 
+    // v1.4 §1 — check and auto-claim any newly-completed missions
+    checkNewMissions() {
+      MISSIONS.forEach((m) => {
+        if (Storage.data.completedMissions.includes(m.id)) return;
+        if (m.progress(Storage.data) >= m.target) {
+          if (Storage.completeMission(m.id)) {
+            Storage.addCoins(m.reward.coins);
+            Storage.addXp(m.reward.xp);
+            this.xpThisGame += m.reward.xp;
+            Audio.achievement();
+            FX.confetti(70, ['#FFD700', '#6FE08A', '#FFFFFF']);
+            const banner = $('mission-banner');
+            if (banner) {
+              banner.innerHTML = `🎯 Mission Complete! <br> ${m.title} <br> +${m.reward.coins}🪙 +${m.reward.xp}XP`;
+              banner.classList.add('show');
+              clearTimeout(this._missionTimer);
+              this._missionTimer = setTimeout(() => banner.classList.remove('show'), 3200);
+            }
+            this.updateHud();
+          }
+        }
+      });
+    },
+
+    // ---------- v1.4 §2 — POWER-UPS ----------
+    maybeSpawnPowerup() {
+      this.foodsSincePowerup++;
+      if (this.powerup || this.foodsSincePowerup < 4) return;
+      if (Math.random() < 0.3) {
+        this.foodsSincePowerup = 0;
+        let pos, tries = 0;
+        do {
+          pos = { x: randInt(0, GRID_SIZE - 1), y: randInt(0, GRID_SIZE - 1) };
+          tries++;
+        } while (tries < 50 && this.occupiedByAnything(pos));
+        const type = POWERUP_KEYS[randInt(0, POWERUP_KEYS.length - 1)];
+        this.powerup = { type, ...pos, bounce: 0 };
+      }
+    },
+
+    collectPowerup() {
+      const def = POWERUPS[this.powerup.type];
+      this.activePowerups[this.powerup.type] = Date.now() + def.duration;
+      Audio.levelUp();
+      const rect = this.canvas.getBoundingClientRect();
+      const px = rect.left + (this.powerup.x + 0.5) * this.cell;
+      const py = rect.top + (this.powerup.y + 0.5) * this.cell;
+      FX.burst(px, py, [def.color, '#FFFFFF']);
+      FX.floatText(px, py, def.name, def.color);
+      this.powerup = null;
+
+      // Tiny Snake — shrink immediately down to a manageable length
+      if (def === POWERUPS.tiny && this.snake.length > 4) {
+        this.snake.length = 4;
+      }
+      this.updateHud();
+    },
+
+    // ---------- v1.4 §3 — MYSTERY CHESTS ----------
+    maybeSpawnChest() {
+      this.foodsSinceChest++;
+      if (this.chest || this.foodsSinceChest < 6) return;
+      if (Math.random() < 0.22) {
+        this.foodsSinceChest = 0;
+        let pos, tries = 0;
+        do {
+          pos = { x: randInt(0, GRID_SIZE - 1), y: randInt(0, GRID_SIZE - 1) };
+          tries++;
+        } while (tries < 50 && this.occupiedByAnything(pos));
+        this.chest = { ...pos, bounce: 0 };
+      }
+    },
+
+    openChest() {
+      this.chest = null;
+      const roll = Math.random();
+      const rect = this.canvas.getBoundingClientRect();
+      const px = rect.left + (this.snake[0].x + 0.5) * this.cell;
+      const py = rect.top + (this.snake[0].y + 0.5) * this.cell;
+      let label;
+      if (roll < 0.4) {
+        const coins = 10 + randInt(0, 15);
+        Storage.addCoins(coins);
+        label = `+${coins} 🪙`;
+      } else if (roll < 0.7) {
+        const xp = 20 + randInt(0, 30);
+        Storage.addXp(xp);
+        this.xpThisGame += xp;
+        label = `+${xp} XP`;
+      } else {
+        const type = POWERUP_KEYS[randInt(0, POWERUP_KEYS.length - 1)];
+        this.activePowerups[type] = Date.now() + POWERUPS[type].duration;
+        label = POWERUPS[type].name + '!';
+      }
+      Audio.achievement();
+      FX.confetti(100, ['#FFD700', '#FFF6C9', '#FFC300']);
+      FX.starBurst(20);
+      FX.floatText(px, py, label, '#FFD700');
+      this.updateHud();
+    },
+
+    // ---------- v1.4 §6 — MINI BOSS (Giant Fruit) ----------
+    maybeSpawnGiantFruit() {
+      this.foodsSinceGiant++;
+      if (this.giantFruit || this.foodsSinceGiant < 8) return;
+      if (Math.random() < 0.25) {
+        this.foodsSinceGiant = 0;
+        let pos, tries = 0;
+        do {
+          pos = { x: randInt(0, GRID_SIZE - 1), y: randInt(0, GRID_SIZE - 1) };
+          tries++;
+        } while (tries < 50 && this.occupiedByAnything(pos));
+        const kind = FOODS[randInt(0, FOODS.length - 1)];
+        this.giantFruit = { ...pos, ...kind, points: 1000, bounce: 0, expiresAt: Date.now() + 7000 };
+      }
+    },
+
+    eatGiantFruit() {
+      const points = this.activePowerups.double ? this.giantFruit.points * 2 : this.giantFruit.points;
+      const previousScore = this.score;
+      this.score += points;
+      this.foodsEaten++;
+      Storage.recordFruit(this.giantFruit.name);
+      const xpGain = 50;
+      this.xpThisGame += xpGain;
+      Storage.addXp(xpGain);
+
+      const rect = this.canvas.getBoundingClientRect();
+      const px = rect.left + (this.giantFruit.x + 0.5) * this.cell;
+      const py = rect.top + (this.giantFruit.y + 0.5) * this.cell;
+      FX.confetti(160, ['#FFD700', '#FFF6C9', '#FFC300', '#FFFFFF']);
+      FX.starBurst(40);
+      FX.floatText(px, py, `+${points}!!`, '#FFD700');
+      Audio.victory();
+      flashScreen();
+      this.glowFrames = 20;
+      this.giantFruit = null;
+      this.snake.pop(); // eating the giant fruit doesn't grow the snake (balance)
+      this.checkNewMissions();
+
+      if (Math.floor(this.score / 1000) > Math.floor(previousScore / 1000)) Milestone.show();
+      const newLevel = getLevelForScore(this.score);
+      if (newLevel > this.level) { this.level = newLevel; LevelUp.show(newLevel); Storage.recordLevel(newLevel); }
+
+      this.updateHud();
+      const best = Math.max(Storage.data.highScore, this.score);
+      if (best > Storage.data.highScore) Storage.set('highScore', best);
+    },
+
+    // Shared helper — true if a cell is occupied by the snake, food, coin, or any special item
+    occupiedByAnything(pos) {
+      if (this.snake.some((s) => s.x === pos.x && s.y === pos.y)) return true;
+      if (this.food && this.food.x === pos.x && this.food.y === pos.y) return true;
+      if (this.coin && this.coin.x === pos.x && this.coin.y === pos.y) return true;
+      if (this.powerup && this.powerup.x === pos.x && this.powerup.y === pos.y) return true;
+      if (this.chest && this.chest.x === pos.x && this.chest.y === pos.y) return true;
+      if (this.giantFruit && this.giantFruit.x === pos.x && this.giantFruit.y === pos.y) return true;
+      return false;
+    },
+
     triggerSecretMode() {
       if (this.secretMode) return;
       this.secretMode = true;
@@ -846,6 +1212,7 @@
       Storage.set('highScore', Math.max(Storage.data.highScore, this.score));
       Storage.addPlayTime(Math.round(this.sessionSeconds)); // V1.3 §6
       this.sessionSeconds = 0;
+      this.checkNewMissions(); // v1.4 §1 — e.g. score/games-played missions
       setTimeout(() => UI.showGameOver(), 260);
     },
 
@@ -867,9 +1234,33 @@
 
       this.drawBoard(ctx, size);
       if (this.coin) this.drawCoin(ctx); // V1.3 §2
+      if (this.powerup) this.drawPowerup(ctx); // v1.4 §2
+      if (this.chest) this.drawChest(ctx); // v1.4 §3
+      if (this.giantFruit) this.drawGiantFruit(ctx); // v1.4 §6
       this.drawFood(ctx);
       this.drawSnake(ctx);
+      if (this.activePowerups.radar) this.drawRadar(ctx); // v1.4 §2
 
+      ctx.restore();
+    },
+
+    // v1.4 §2 — Fruit Radar: a small pulsing arrow at the head, pointing toward the fruit
+    drawRadar(ctx) {
+      const head = this.snake[0];
+      const hx = head.x * this.cell + this.cell / 2;
+      const hy = head.y * this.cell + this.cell / 2;
+      const angle = Math.atan2(this.food.y - head.y, this.food.x - head.x);
+      ctx.save();
+      ctx.translate(hx, hy);
+      ctx.rotate(angle);
+      ctx.globalAlpha = 0.7 + Math.sin(Date.now() / 200) * 0.2;
+      ctx.fillStyle = '#6FE08A';
+      ctx.beginPath();
+      ctx.moveTo(this.cell * 0.75, 0);
+      ctx.lineTo(this.cell * 0.55, -this.cell * 0.12);
+      ctx.lineTo(this.cell * 0.55, this.cell * 0.12);
+      ctx.closePath();
+      ctx.fill();
       ctx.restore();
     },
 
@@ -906,6 +1297,73 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('🪙', cx, cy);
+      ctx.restore();
+    },
+
+    // v1.4 §2 — power-up pickup (glowing icon, colored per type)
+    drawPowerup(ctx) {
+      const p = this.powerup;
+      const def = POWERUPS[p.type];
+      p.bounce = (p.bounce + 0.16) % (Math.PI * 2);
+      const bounceOffset = Math.sin(p.bounce) * 3;
+      const cx = p.x * this.cell + this.cell / 2;
+      const cy = p.y * this.cell + this.cell / 2 + bounceOffset;
+
+      ctx.save();
+      ctx.shadowColor = def.color;
+      ctx.shadowBlur = 20;
+      ctx.font = `${this.cell * 0.75}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(def.icon, cx, cy);
+      ctx.restore();
+    },
+
+    // v1.4 §3 — mystery chest (gentle golden glow, bigger emoji)
+    drawChest(ctx) {
+      const c = this.chest;
+      c.bounce = (c.bounce + 0.12) % (Math.PI * 2);
+      const pulse = 1 + Math.sin(c.bounce * 2) * 0.08;
+      const cx = c.x * this.cell + this.cell / 2;
+      const cy = c.y * this.cell + this.cell / 2;
+
+      ctx.save();
+      ctx.shadowColor = '#FFD700';
+      ctx.shadowBlur = 22;
+      ctx.translate(cx, cy);
+      ctx.scale(pulse, pulse);
+      ctx.font = `${this.cell * 0.85}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🎁', 0, 0);
+      ctx.restore();
+    },
+
+    // v1.4 §6 — giant "mini boss" fruit: big, glowing, with a countdown ring
+    drawGiantFruit(ctx) {
+      const g = this.giantFruit;
+      const cx = g.x * this.cell + this.cell / 2;
+      const cy = g.y * this.cell + this.cell / 2;
+      const timeLeft = clamp((g.expiresAt - Date.now()) / 7000, 0, 1);
+
+      ctx.save();
+      ctx.strokeStyle = '#FFD700';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, this.cell * 0.85, -Math.PI / 2, -Math.PI / 2 + timeLeft * Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.shadowColor = g.color;
+      ctx.shadowBlur = 26;
+      const pulse = 1 + Math.sin(Date.now() / 150) * 0.08;
+      ctx.translate(cx, cy);
+      ctx.scale(pulse, pulse);
+      ctx.font = `${this.cell * 1.5}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(g.emoji, 0, 0);
       ctx.restore();
     },
 
@@ -948,7 +1406,7 @@
 
     drawSnake(ctx) {
       const rainbow = ['#FF6F61', '#FFD93D', '#6FE08A', '#7FB8F0', '#B983FF'];
-      const t = clamp(this.acc / this.stepMs, 0, 1); // Visual Evolution — interpolation progress
+      const t = clamp(this.acc / (this.effectiveStepMs || this.stepMs), 0, 1); // interpolation progress
       const now = performance.now();
       const skin = SKINS[Storage.data.currentSkin] || SKINS.green; // V1.3 §3
 
@@ -1104,6 +1562,25 @@
       if (levelEl && levelEl.textContent != this.level) { levelEl.textContent = this.level; this.popHud(levelEl); } // V1.3 §1
       const coinsEl = $('hud-coins');
       if (coinsEl && coinsEl.textContent != Storage.data.coins) { coinsEl.textContent = Storage.data.coins; this.popHud(coinsEl); } // V1.3 §2
+
+      // v1.4 — combo pill (only shown while a combo is active)
+      const comboPill = $('hud-combo-pill');
+      const comboEl = $('hud-combo');
+      if (comboPill && comboEl) {
+        if (this.combo >= 2) {
+          comboPill.classList.add('show');
+          if (comboEl.textContent != this.combo) { comboEl.textContent = this.combo; this.popHud(comboEl); }
+        } else {
+          comboPill.classList.remove('show');
+        }
+      }
+
+      // v1.4 — active power-up icon strip
+      const strip = $('hud-powerups');
+      if (strip) {
+        const active = Object.keys(this.activePowerups);
+        strip.innerHTML = active.map((k) => `<span class="powerup-chip" title="${POWERUPS[k].name}">${POWERUPS[k].icon}</span>`).join('');
+      }
     },
 
     pause() {
@@ -1234,6 +1711,10 @@
       $('btn-stats-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
       $('btn-daily-reward-close').addEventListener('click', () => { Audio.click(); Screens.overlay('daily-reward', false); });
 
+      // v1.4 — Mission Center
+      $('btn-missions').addEventListener('click', () => { Audio.click(); this.renderMissions(); Screens.show('missions'); });
+      $('btn-missions-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
+
       $('btn-sound-toggle').addEventListener('click', () => {
         Audio.init();
         const on = !Storage.data.sfxOn || !Storage.data.musicOn ? true : false;
@@ -1335,6 +1816,11 @@
       const newlyUnlocked = Math.max(0, achievementsNow - Game.achievementsAtStart);
       setText('final-achievements', newlyUnlocked);
 
+      // v1.4 §9 — XP earned and missions completed this round
+      setText('final-xp', Game.xpThisGame);
+      const missionsNow = MISSIONS.filter((m) => Storage.data.completedMissions.includes(m.id)).length;
+      setText('final-missions', Math.max(0, missionsNow - Game.missionsAtStart));
+
       Screens.overlay('gameover', true);
     },
 
@@ -1428,6 +1914,35 @@
       setText('stat-highest-level', s.highestLevel);
       setText('stat-favorite-fruit', favorite);
       setText('stat-time-played', `${minutes}m ${seconds}s`);
+      // v1.4 additions
+      setText('stat-xp', Storage.data.xp);
+      setText('stat-achievements-done', `${ACHIEVEMENTS.filter((a) => a.done(Storage.data)).length} / ${ACHIEVEMENTS.length}`);
+    },
+
+    // ---------- v1.4 §1 — Mission Center ----------
+    renderMissions() {
+      const list = $('missions-list');
+      if (!list) return;
+      list.innerHTML = '';
+      MISSIONS.forEach((m) => {
+        const done = Storage.data.completedMissions.includes(m.id);
+        const progress = Math.min(m.progress(Storage.data), m.target);
+        const pct = Math.round((progress / m.target) * 100);
+        const item = document.createElement('div');
+        item.className = 'mission-item' + (done ? ' done' : '');
+        item.innerHTML = `
+          <div class="mission-row">
+            <span class="mission-icon">${done ? '🏅' : m.icon}</span>
+            <span class="mission-text">
+              <strong>${m.title}</strong>
+              <small>${done ? 'Reward claimed!' : `+${m.reward.coins} 🪙 · +${m.reward.xp} XP`}</small>
+            </span>
+            <span class="mission-state">${done ? '✅' : `${progress}/${m.target}`}</span>
+          </div>
+          <div class="mission-bar"><div class="mission-bar-fill" style="width:${done ? 100 : pct}%"></div></div>
+        `;
+        list.appendChild(item);
+      });
     }
   };
 
