@@ -1038,6 +1038,94 @@ button {
 }
 
 /* =========================================================
+   V1.5 — PREMIUM ADVENTURE UPDATE
+   ========================================================= */
+
+/* §6 Seasonal badge */
+.seasonal-badge {
+  display: none;
+  background: linear-gradient(135deg, #FFD1F5, #B983FF);
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 4px 12px;
+  margin: 4px auto 8px;
+  width: fit-content;
+}
+.seasonal-badge.show { display: block; }
+
+/* §3 Pet preview in the shop */
+.pet-preview {
+  font-size: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, #FFF6D6, #FFE9A8);
+}
+
+/* §5 Collectibles chips */
+.collectibles-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+.collectibles-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.collectible-chip {
+  background: #F1F6FF;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.collectible-chip.complete {
+  background: linear-gradient(135deg, #FFF6D6, #FFE9A8);
+  border: 1px solid var(--gold);
+}
+
+/* §2 Daily/Weekly quest card accents */
+.mission-item.quest-daily { border-left: 4px solid #7FB8F0; }
+.mission-item.quest-weekly { border-left: 4px solid #B983FF; }
+
+/* §1 World Map / stage list */
+.stage-item.locked { opacity: 0.55; }
+
+/* §9 Tutorial text */
+.tutorial-text {
+  text-align: left;
+  color: var(--ink);
+  font-size: 14px;
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+/* §7 Photo Mode — hide interactive chrome, keep the animated background */
+body.photo-mode .game-hud,
+body.photo-mode .touch-controls,
+body.photo-mode .secret-banner,
+body.photo-mode .milestone-banner,
+body.photo-mode .levelup-banner,
+body.photo-mode .mission-banner {
+  display: none !important;
+}
+
+/* §8 Accessibility modes */
+body.large-ui .btn { font-size: 19px; padding: 17px 24px; }
+body.large-ui .hud-pill { font-size: 18px; padding: 10px 18px; }
+body.large-ui .panel-title { font-size: 26px; }
+
+body.big-buttons .touch-btn { width: 76px; height: 76px; font-size: 30px; }
+body.big-buttons .hud-btn { width: 52px; height: 52px; font-size: 22px; }
+
+body.color-friendly .hud-pill.hud-combo-pill { background: linear-gradient(135deg, #0072B2, #56B4E9); }
+body.color-friendly .mission-item.done { background: linear-gradient(135deg, #E8F4FF, #CDE8FF); border-color: #0072B2; }
+body.color-friendly .achievement-item.done { background: linear-gradient(135deg, #E8F4FF, #CDE8FF); border-color: #0072B2; }
+
+body.high-contrast { filter: contrast(1.25) saturate(1.1); }
+body.high-contrast .hud-pill,
+body.high-contrast .menu-card,
+body.high-contrast .overlay-card {
+  border: 2px solid #000;
+}
+
+/* =========================================================
    V1.3 §4 — DAILY REWARD
    ========================================================= */
 .daily-reward-amount {

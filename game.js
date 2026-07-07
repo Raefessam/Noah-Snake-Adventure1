@@ -49,6 +49,15 @@
       xp: 0, // v1.4 — Adventure Expansion: separate XP pool
       completedMissions: [], // v1.4 — mission ids already claimed (one-time rewards)
       bestCombo: 0, // v1.4 — highest combo streak ever reached
+      // v1.5 additions — all new fields, fully backward compatible
+      unlockedPets: ['fox'],
+      currentPet: 'fox',
+      collectibles: { star: 0, crystal: 0, leaf: 0, key: 0, egg: 0 },
+      collectibleSetsCompleted: [],
+      accessibility: { largeUI: false, colorFriendly: false, highContrast: false, bigButtons: false },
+      tutorialSeen: false,
+      dailyQuest: { date: 0, progress: 0, claimed: false },
+      weeklyQuest: { weekStart: 0, progress: 0, claimed: false },
       stats: {
         gamesPlayed: 0,
         totalFruits: 0,
@@ -67,9 +76,15 @@
         // Merge nested "stats" so an old save missing a new stat field
         // still gets sensible defaults instead of losing the whole object.
         this.data.stats = { ...this.defaults.stats, ...(parsed.stats || {}) };
+        this.data.collectibles = { ...this.defaults.collectibles, ...(parsed.collectibles || {}) };
+        this.data.accessibility = { ...this.defaults.accessibility, ...(parsed.accessibility || {}) };
+        this.data.dailyQuest = { ...this.defaults.dailyQuest, ...(parsed.dailyQuest || {}) };
+        this.data.weeklyQuest = { ...this.defaults.weeklyQuest, ...(parsed.weeklyQuest || {}) };
         if (!Array.isArray(this.data.unlockedSkins)) this.data.unlockedSkins = ['green'];
         if (!this.data.unlockedSkins.includes('green')) this.data.unlockedSkins.push('green');
         if (!Array.isArray(this.data.completedMissions)) this.data.completedMissions = [];
+        if (!Array.isArray(this.data.unlockedPets)) this.data.unlockedPets = ['fox'];
+        if (!Array.isArray(this.data.collectibleSetsCompleted)) this.data.collectibleSetsCompleted = [];
       } catch (e) {
         this.data = { ...this.defaults, stats: { ...this.defaults.stats } };
       }
@@ -147,6 +162,40 @@
         this.data.bestCombo = comboCount;
         this.save();
       }
+    },
+
+    // ---------- v1.5 helpers ----------
+    unlockPet(id) {
+      if (!this.data.unlockedPets.includes(id)) {
+        this.data.unlockedPets.push(id);
+        this.save();
+      }
+    },
+    addCollectible(type) {
+      if (!(type in this.data.collectibles)) this.data.collectibles[type] = 0;
+      this.data.collectibles[type]++;
+      this.save();
+    },
+    completeCollectibleSet(type) {
+      if (!this.data.collectibleSetsCompleted.includes(type)) {
+        this.data.collectibleSetsCompleted.push(type);
+        this.save();
+        return true;
+      }
+      return false;
+    },
+    setAccessibility(key, value) {
+      this.data.accessibility[key] = value;
+      this.save();
+    },
+    // Returns today's date as a simple YYYY-MM-DD-ish integer for day-boundary comparisons
+    todayKey() {
+      const d = new Date();
+      return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+    },
+    weekKey() {
+      // Number of full weeks since epoch — changes once every 7 days
+      return Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000));
     }
   };
   Storage.load();
@@ -277,7 +326,7 @@
      (pause, game over).
      =========================================================== */
   const Screens = {
-    all: ['menu', 'levels', 'settings', 'credits', 'game', 'shop', 'achievements', 'stats', 'missions'],
+    all: ['menu', 'levels', 'settings', 'credits', 'game', 'shop', 'achievements', 'stats', 'missions', 'worldmap'],
     show(name) {
       this.all.forEach((s) => $(`screen-${s}`).classList.toggle('active', s === name));
     },
@@ -470,6 +519,55 @@
     }
   };
 
+  /* ===========================================================
+     V1.5 §2 — Daily/Weekly Quest lifecycle helper
+     =========================================================== */
+  const Quests = {
+    checkReset() {
+      const today = Storage.todayKey();
+      if (Storage.data.dailyQuest.date !== today) {
+        Storage.data.dailyQuest = { date: today, progress: 0, claimed: false };
+        Storage.save();
+      }
+      const week = Storage.weekKey();
+      if (Storage.data.weeklyQuest.weekStart !== week) {
+        Storage.data.weeklyQuest = { weekStart: week, progress: 0, claimed: false };
+        Storage.save();
+      }
+    },
+    addDailyProgress(n) {
+      this.checkReset();
+      if (Storage.data.dailyQuest.claimed) return;
+      Storage.data.dailyQuest.progress += n;
+      if (Storage.data.dailyQuest.progress >= DAILY_QUEST.target) this.claimDaily();
+      Storage.save();
+    },
+    claimDaily() {
+      if (Storage.data.dailyQuest.claimed) return;
+      Storage.data.dailyQuest.claimed = true;
+      Storage.addCoins(DAILY_QUEST.reward.coins);
+      Storage.addXp(DAILY_QUEST.reward.xp);
+      if (typeof Game !== 'undefined' && Game.xpThisGame !== undefined) Game.xpThisGame += DAILY_QUEST.reward.xp;
+      Audio.achievement();
+      FX.confetti(70, ['#FFD700', '#6FE08A']);
+    },
+    addWeeklyProgress(n) {
+      this.checkReset();
+      if (Storage.data.weeklyQuest.claimed) return;
+      Storage.data.weeklyQuest.progress += n;
+      if (Storage.data.weeklyQuest.progress >= WEEKLY_QUEST.target) this.claimWeekly();
+      Storage.save();
+    },
+    claimWeekly() {
+      if (Storage.data.weeklyQuest.claimed) return;
+      Storage.data.weeklyQuest.claimed = true;
+      Storage.addCoins(WEEKLY_QUEST.reward.coins);
+      Storage.addXp(WEEKLY_QUEST.reward.xp);
+      Audio.achievement();
+      FX.confetti(100, ['#FFD700', '#B983FF']);
+    }
+  };
+
   const Milestone = {
     timer: null,
     show() {
@@ -512,6 +610,7 @@
       banner.classList.add('show');
       clearTimeout(this.timer);
       this.timer = setTimeout(() => banner.classList.remove('show'), 2800);
+      if (typeof Game !== 'undefined') Game.petCelebrate = 40; // v1.5 §3 — pet celebration hop
     }
   };
 
@@ -632,6 +731,85 @@
   const POWERUP_KEYS = Object.keys(POWERUPS);
 
   /* ===========================================================
+     V1.5 §3 — PET SYSTEM
+     A companion that follows the snake and reacts to events.
+     Never affects gameplay/collision — purely a decorative friend.
+     =========================================================== */
+  const PETS = {
+    fox:    { name: 'Baby Fox',    icon: '🦊', cost: 0 },
+    panda:  { name: 'Baby Panda',  icon: '🐼', cost: 60 },
+    dragon: { name: 'Baby Dragon', icon: '🐲', cost: 150 },
+    bunny:  { name: 'Baby Bunny',  icon: '🐰', cost: 40 },
+    owl:    { name: 'Baby Owl',    icon: '🦉', cost: 90 }
+  };
+
+  /* ===========================================================
+     V1.5 §4 — EMOTES
+     Random positive callouts shown after objectives are completed.
+     =========================================================== */
+  const EMOTES = ['Amazing!', 'Fantastic!', 'Awesome Noah!', 'Great Job!', 'Super Hero!', 'Wonderful!'];
+  const showEmote = (px, py) => {
+    const text = EMOTES[randInt(0, EMOTES.length - 1)];
+    FX.floatText(px, py, text, '#FF6F61');
+  };
+
+  /* ===========================================================
+     V1.5 §5 — COLLECTIBLES
+     Rare hidden items. Collecting 10 of one type completes that
+     "set" and grants a one-time cosmetic-flavored coin reward.
+     =========================================================== */
+  const COLLECTIBLES = {
+    star:    { icon: '🌟', name: 'Star',       setSize: 10, reward: 40 },
+    crystal: { icon: '💎', name: 'Crystal',     setSize: 10, reward: 40 },
+    leaf:    { icon: '🍁', name: 'Magic Leaf',  setSize: 10, reward: 40 },
+    key:     { icon: '🗝️', name: 'Ancient Key', setSize: 10, reward: 40 },
+    egg:     { icon: '🥚', name: 'Special Egg', setSize: 10, reward: 40 }
+  };
+  const COLLECTIBLE_KEYS = Object.keys(COLLECTIBLES);
+
+  /* ===========================================================
+     V1.5 §6 — SEASONAL EVENTS (architecture)
+     Defines date-windows and a theme; the rest of the game only
+     ever asks getActiveSeason() for the current theme, so a new
+     season can be added here later without touching other systems.
+     =========================================================== */
+  const SEASONS = [
+    { id: 'halloween', name: 'Halloween', icon: '🎃', start: [10, 20], end: [10, 31] },
+    { id: 'christmas', name: 'Christmas', icon: '🎄', start: [12, 15], end: [12, 26] }
+  ];
+  const getActiveSeason = () => {
+    const now = new Date();
+    const m = now.getMonth() + 1, d = now.getDate();
+    return SEASONS.find((s) => {
+      const [sm, sd] = s.start, [em, ed] = s.end;
+      const val = m * 100 + d, sv = sm * 100 + sd, ev = em * 100 + ed;
+      return val >= sv && val <= ev;
+    }) || null;
+  };
+
+  /* ===========================================================
+     V1.5 §1 — STORY MODE (progress map)
+     A visual progress path through the current single board,
+     built entirely from the existing Level thresholds — no
+     separate level layouts, so nothing about core gameplay changes.
+     =========================================================== */
+  const STAGES = [
+    { id: 1, name: 'Stage 1', icon: '🌳', levelRequired: 1 },
+    { id: 2, name: 'Stage 2', icon: '🌲', levelRequired: 2 },
+    { id: 3, name: 'Stage 3', icon: '🍄', levelRequired: 3 },
+    { id: 4, name: 'Boss Stage', icon: '🐉', levelRequired: 4 }
+  ];
+
+  /* ===========================================================
+     V1.5 §2 — QUEST SYSTEM
+     Main Quests reuse the existing Mission Center (MISSIONS).
+     Daily/Weekly quests are separate, timeboxed, and reset
+     automatically using a simple date/week key comparison.
+     =========================================================== */
+  const DAILY_QUEST = { title: 'Collect 5 Fruits Today', icon: '📅', target: 5, reward: { coins: 15, xp: 20 } };
+  const WEEKLY_QUEST = { title: 'Play 5 Games This Week', icon: '🗓️', target: 5, reward: { coins: 60, xp: 100 } };
+
+  /* ===========================================================
      6. THE GAME  (Snake + Food + Loop)
      =========================================================== */
   // V1.2 — Better Food System: 6 fruits, each with its own point
@@ -702,6 +880,12 @@
     missionsAtStart: 0,      // snapshot for the improved end screen
     worldEventTimer: 0,      // ms until the next lightweight background world event
 
+    // ---------- v1.5 Premium Adventure Update state ----------
+    petTrail: [],            // recent head positions the pet follows, most-recent first
+    collectible: null,       // { type, x, y, bounce } or null — rare hidden item on the board
+    foodsSinceCollectible: 0,
+    petCelebrate: 0,         // frames remaining for the pet's level-up celebration hop
+
     init() {
       this.canvas = $('game-canvas');
       this.ctx = this.canvas.getContext('2d');
@@ -753,6 +937,13 @@
       this.xpThisGame = 0;
       this.missionsAtStart = MISSIONS.filter((m) => Storage.data.completedMissions.includes(m.id)).length;
       this.worldEventTimer = 8000 + Math.random() * 6000;
+      // v1.5 resets
+      this.petTrail = [];
+      this.collectible = null;
+      this.foodsSinceCollectible = 0;
+      this.petCelebrate = 0;
+      Quests.checkReset();
+      Quests.addWeeklyProgress(1); // this game session counts toward "Play 5 Games This Week"
       this.secretMode = false;
       this.secretBuffer = '';
       $('secret-banner').classList.remove('show');
@@ -881,6 +1072,15 @@
 
       this.snake.unshift(newHead);
 
+      // v1.5 §3 — pet trail: remember recent head positions so the pet can follow a few steps behind
+      this.petTrail.unshift({ x: head.x, y: head.y });
+      if (this.petTrail.length > 6) this.petTrail.length = 6;
+
+      // v1.5 §5 — hidden collectible pickup
+      if (this.collectible && newHead.x === this.collectible.x && newHead.y === this.collectible.y) {
+        this.collectItem();
+      }
+
       // v1.4 §2/§3/§6 — power-up / mystery chest / giant fruit collisions
       if (this.powerup && newHead.x === this.powerup.x && newHead.y === this.powerup.y) {
         this.collectPowerup();
@@ -987,6 +1187,8 @@
       this.maybeSpawnPowerup(); // v1.4 §2
       this.maybeSpawnChest(); // v1.4 §3
       this.maybeSpawnGiantFruit(); // v1.4 §6
+      this.maybeSpawnCollectible(); // v1.5 §5
+      Quests.addDailyProgress(1); // v1.5 §2 — "Collect 5 Fruits Today"
 
       const best = Math.max(Storage.data.highScore, this.score);
       if (best > Storage.data.highScore) Storage.set('highScore', best);
@@ -1029,7 +1231,11 @@
     // on the Achievements screen.
     checkNewAchievements() {
       const count = ACHIEVEMENTS.filter((a) => a.done(Storage.data)).length;
-      if (count > this.lastAchievementCount) Audio.achievement();
+      if (count > this.lastAchievementCount) {
+        Audio.achievement();
+        const rect = this.canvas.getBoundingClientRect();
+        showEmote(rect.left + rect.width / 2, rect.top + rect.height * 0.3); // v1.5 §4
+      }
       this.lastAchievementCount = count;
     },
 
@@ -1183,6 +1389,52 @@
     },
 
     // Shared helper — true if a cell is occupied by the snake, food, coin, or any special item
+    // ---------- v1.5 §5 — COLLECTIBLES ----------
+    maybeSpawnCollectible() {
+      this.foodsSinceCollectible++;
+      if (this.collectible || this.foodsSinceCollectible < 10) return;
+      if (Math.random() < 0.2) {
+        this.foodsSinceCollectible = 0;
+        let pos, tries = 0;
+        do {
+          pos = { x: randInt(0, GRID_SIZE - 1), y: randInt(0, GRID_SIZE - 1) };
+          tries++;
+        } while (tries < 50 && this.occupiedByAnything(pos));
+        const type = COLLECTIBLE_KEYS[randInt(0, COLLECTIBLE_KEYS.length - 1)];
+        this.collectible = { type, ...pos, bounce: 0 };
+      }
+    },
+
+    collectItem() {
+      const type = this.collectible.type;
+      const def = COLLECTIBLES[type];
+      this.collectible = null;
+      Storage.addCollectible(type);
+      Audio.coin();
+
+      const rect = this.canvas.getBoundingClientRect();
+      const px = rect.left + (this.snake[0].x + 0.5) * this.cell;
+      const py = rect.top + (this.snake[0].y + 0.5) * this.cell;
+      FX.burst(px, py, ['#FFD700', '#FFFFFF']);
+      FX.floatText(px, py, def.icon + ' +1', '#FFD700');
+
+      if (Storage.data.collectibles[type] >= def.setSize) {
+        if (Storage.completeCollectibleSet(type)) {
+          Storage.addCoins(def.reward);
+          Audio.achievement();
+          FX.confetti(120, ['#FFD700', '#B983FF', '#FFFFFF']);
+          showEmote(px, py - 30);
+          const banner = $('mission-banner');
+          if (banner) {
+            banner.innerHTML = `${def.icon} ${def.name} Set Complete! <br> +${def.reward} 🪙`;
+            banner.classList.add('show');
+            setTimeout(() => banner.classList.remove('show'), 3200);
+          }
+        }
+      }
+      this.updateHud();
+    },
+
     occupiedByAnything(pos) {
       if (this.snake.some((s) => s.x === pos.x && s.y === pos.y)) return true;
       if (this.food && this.food.x === pos.x && this.food.y === pos.y) return true;
@@ -1190,6 +1442,7 @@
       if (this.powerup && this.powerup.x === pos.x && this.powerup.y === pos.y) return true;
       if (this.chest && this.chest.x === pos.x && this.chest.y === pos.y) return true;
       if (this.giantFruit && this.giantFruit.x === pos.x && this.giantFruit.y === pos.y) return true;
+      if (this.collectible && this.collectible.x === pos.x && this.collectible.y === pos.y) return true;
       return false;
     },
 
@@ -1237,7 +1490,9 @@
       if (this.powerup) this.drawPowerup(ctx); // v1.4 §2
       if (this.chest) this.drawChest(ctx); // v1.4 §3
       if (this.giantFruit) this.drawGiantFruit(ctx); // v1.4 §6
+      if (this.collectible) this.drawCollectible(ctx); // v1.5 §5
       this.drawFood(ctx);
+      this.drawPet(ctx); // v1.5 §3 — drawn before the snake so the snake reads on top
       this.drawSnake(ctx);
       if (this.activePowerups.radar) this.drawRadar(ctx); // v1.4 §2
 
@@ -1364,6 +1619,59 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(g.emoji, 0, 0);
+      ctx.restore();
+    },
+
+    // v1.5 §5 — hidden collectible (gentle glow, distinct per type)
+    drawCollectible(ctx) {
+      const c = this.collectible;
+      const def = COLLECTIBLES[c.type];
+      c.bounce = (c.bounce + 0.1) % (Math.PI * 2);
+      const pulse = 1 + Math.sin(c.bounce * 2) * 0.1;
+      const cx = c.x * this.cell + this.cell / 2;
+      const cy = c.y * this.cell + this.cell / 2;
+      ctx.save();
+      ctx.shadowColor = '#FFD700';
+      ctx.shadowBlur = 18;
+      ctx.translate(cx, cy);
+      ctx.scale(pulse, pulse);
+      ctx.font = `${this.cell * 0.7}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(def.icon, 0, 0);
+      ctx.restore();
+    },
+
+    // v1.5 §3 — companion pet: follows a few steps behind the head, bounces on
+    // eat (via glowFrames-style hop), celebrates on level-up, sleeps when paused.
+    drawPet(ctx) {
+      const petId = Storage.data.currentPet;
+      const pet = PETS[petId] || PETS.fox;
+      const followPos = this.petTrail[Math.min(3, this.petTrail.length - 1)] || this.snake[this.snake.length - 1];
+      if (!followPos) return;
+      const cx = followPos.x * this.cell + this.cell / 2;
+      let cy = followPos.y * this.cell + this.cell / 2;
+
+      let bob = Math.sin(performance.now() / 400) * 2;
+      let scale = 1;
+      let label = '';
+      if (this.paused) {
+        label = '💤';
+      } else if (this.petCelebrate > 0) {
+        bob = -Math.abs(Math.sin(performance.now() / 90)) * this.cell * 0.3;
+        scale = 1.15;
+        this.petCelebrate--;
+      } else if (this.glowFrames > 0) {
+        scale = 1.1; // little bounce right after the snake eats
+      }
+
+      ctx.save();
+      ctx.globalAlpha = 0.95;
+      ctx.font = `${this.cell * 0.6 * scale}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pet.icon, cx, cy + bob);
+      if (label) ctx.fillText(label, cx + this.cell * 0.4, cy - this.cell * 0.4);
       ctx.restore();
     },
 
@@ -1586,6 +1894,7 @@
     pause() {
       this.paused = true;
       Audio.stopMusic();
+      this.render(); // v1.5 §3 — draw one paused frame so the pet's sleep icon shows
     },
     resume() {
       this.paused = false;
@@ -1689,8 +1998,19 @@
       $('toggle-music').checked = Storage.data.musicOn;
       $('toggle-motion').checked = Storage.data.reducedMotion;
       document.body.classList.toggle('reduced-motion', Storage.data.reducedMotion);
+      // v1.5 §8 — apply saved accessibility options
+      const acc = Storage.data.accessibility;
+      document.body.classList.toggle('large-ui', acc.largeUI);
+      document.body.classList.toggle('color-friendly', acc.colorFriendly);
+      document.body.classList.toggle('high-contrast', acc.highContrast);
+      document.body.classList.toggle('big-buttons', acc.bigButtons);
+      if ($('toggle-large-ui')) $('toggle-large-ui').checked = acc.largeUI;
+      if ($('toggle-color-friendly')) $('toggle-color-friendly').checked = acc.colorFriendly;
+      if ($('toggle-high-contrast')) $('toggle-high-contrast').checked = acc.highContrast;
+      if ($('toggle-big-buttons')) $('toggle-big-buttons').checked = acc.bigButtons;
       this.updateSoundIcon();
       this.refreshProfile(); // Magic Forest Update
+      this.applySeasonalBadge(); // v1.5 §6
 
       $('btn-play').addEventListener('click', () => {
         Audio.init(); Audio.resume(); Audio.click();
@@ -1747,6 +2067,39 @@
         Storage.set('reducedMotion', e.target.checked);
         document.body.classList.toggle('reduced-motion', e.target.checked);
       });
+
+      // v1.5 §8 — accessibility toggles
+      const accToggle = (id, key, cls) => {
+        const el = $(id);
+        if (!el) return;
+        el.addEventListener('change', (e) => {
+          Storage.setAccessibility(key, e.target.checked);
+          document.body.classList.toggle(cls, e.target.checked);
+          Audio.click();
+        });
+      };
+      accToggle('toggle-large-ui', 'largeUI', 'large-ui');
+      accToggle('toggle-color-friendly', 'colorFriendly', 'color-friendly');
+      accToggle('toggle-high-contrast', 'highContrast', 'high-contrast');
+      accToggle('toggle-big-buttons', 'bigButtons', 'big-buttons');
+
+      // v1.5 §1 — World Map (Story Mode)
+      $('btn-worldmap').addEventListener('click', () => { Audio.click(); this.renderWorldMap(); Screens.show('worldmap'); });
+      $('btn-worldmap-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
+
+      // v1.5 §7 — Photo Mode (available from the pause menu)
+      $('btn-photo-mode').addEventListener('click', () => {
+        Audio.click();
+        document.body.classList.toggle('photo-mode');
+      });
+
+      // v1.5 §9 — Smart Tutorial
+      $('btn-tutorial-close').addEventListener('click', () => {
+        Audio.click();
+        Storage.set('tutorialSeen', true);
+        Screens.overlay('tutorial', false);
+        this._startGameNow(this.pendingLevel || Storage.data.lastDifficulty);
+      });
       $('btn-reset-score').addEventListener('click', () => {
         Storage.set('highScore', 0);
         Game.updateHud();
@@ -1785,7 +2138,30 @@
       setText('profile-streak', Storage.data.streak || 0);
     },
 
+    // v1.5 §6 — Seasonal Events (architecture): shows a small badge if a
+    // season window is currently active. No other system needs to know.
+    applySeasonalBadge() {
+      const badge = $('seasonal-badge');
+      if (!badge) return;
+      const season = getActiveSeason();
+      if (season) {
+        badge.textContent = `${season.icon} ${season.name}`;
+        badge.classList.add('show');
+      } else {
+        badge.classList.remove('show');
+      }
+    },
+
     startGame(level) {
+      if (!Storage.data.tutorialSeen) {
+        this.pendingLevel = level; // v1.5 §9 — resume after the player dismisses the tutorial
+        Screens.overlay('tutorial', true);
+        return;
+      }
+      this._startGameNow(level);
+    },
+
+    _startGameNow(level) {
       Screens.show('game');
       Game.start(level);
       if (Storage.data.musicOn) {
@@ -1875,6 +2251,42 @@
       });
       const balanceEl = $('shop-coin-balance');
       if (balanceEl) balanceEl.textContent = Storage.data.coins;
+
+      // v1.5 §3 — Companion Pets
+      const petGrid = $('pet-shop-grid');
+      if (petGrid) {
+        petGrid.innerHTML = '';
+        Object.keys(PETS).forEach((id) => {
+          const pet = PETS[id];
+          const owned = Storage.data.unlockedPets.includes(id);
+          const equipped = Storage.data.currentPet === id;
+          const card = document.createElement('div');
+          card.className = 'shop-card';
+          card.innerHTML = `
+            <div class="shop-preview pet-preview">${pet.icon}</div>
+            <span class="shop-skin-name">${pet.name}</span>
+            <span class="shop-skin-cost">${pet.cost === 0 ? 'Free' : `🪙 ${pet.cost}`}</span>
+            <button class="btn ${equipped ? 'btn-secondary' : 'btn-primary'} shop-action">
+              ${equipped ? '✔️ Following' : (owned ? 'Choose' : 'Adopt')}
+            </button>
+          `;
+          card.querySelector('.shop-action').addEventListener('click', () => {
+            Audio.click();
+            if (Storage.data.currentPet === id) return;
+            if (Storage.data.unlockedPets.includes(id)) {
+              Storage.set('currentPet', id);
+            } else if (Storage.spendCoins(pet.cost)) {
+              Storage.unlockPet(id);
+              Storage.set('currentPet', id);
+              FX.confetti(60);
+            } else {
+              return;
+            }
+            this.renderShop();
+          });
+          petGrid.appendChild(card);
+        });
+      }
     },
 
     // ---------- V1.3 §5 — Achievements ----------
@@ -1917,10 +2329,52 @@
       // v1.4 additions
       setText('stat-xp', Storage.data.xp);
       setText('stat-achievements-done', `${ACHIEVEMENTS.filter((a) => a.done(Storage.data)).length} / ${ACHIEVEMENTS.length}`);
+
+      // v1.5 §5 — collectibles summary
+      const collEl = $('stat-collectibles');
+      if (collEl) {
+        collEl.innerHTML = COLLECTIBLE_KEYS.map((k) => {
+          const def = COLLECTIBLES[k];
+          const count = Storage.data.collectibles[k] || 0;
+          const complete = Storage.data.collectibleSetsCompleted.includes(k);
+          return `<span class="collectible-chip${complete ? ' complete' : ''}">${def.icon} ${count}/${def.setSize}</span>`;
+        }).join('');
+      }
     },
 
     // ---------- v1.4 §1 — Mission Center ----------
     renderMissions() {
+      Quests.checkReset(); // v1.5 §2
+
+      // v1.5 — Daily/Weekly quest cards, rendered above the existing missions
+      const questList = $('quests-list');
+      if (questList) {
+        questList.innerHTML = '';
+        const dq = Storage.data.dailyQuest, wq = Storage.data.weeklyQuest;
+        const cards = [
+          { def: DAILY_QUEST, state: dq, cls: 'daily' },
+          { def: WEEKLY_QUEST, state: wq, cls: 'weekly' }
+        ];
+        cards.forEach(({ def, state, cls }) => {
+          const progress = Math.min(state.progress, def.target);
+          const pct = Math.round((progress / def.target) * 100);
+          const item = document.createElement('div');
+          item.className = 'mission-item quest-' + cls + (state.claimed ? ' done' : '');
+          item.innerHTML = `
+            <div class="mission-row">
+              <span class="mission-icon">${state.claimed ? '🏅' : def.icon}</span>
+              <span class="mission-text">
+                <strong>${def.title}</strong>
+                <small>${state.claimed ? 'Reward claimed!' : `+${def.reward.coins} 🪙 · +${def.reward.xp} XP`}</small>
+              </span>
+              <span class="mission-state">${state.claimed ? '✅' : `${progress}/${def.target}`}</span>
+            </div>
+            <div class="mission-bar"><div class="mission-bar-fill" style="width:${state.claimed ? 100 : pct}%"></div></div>
+          `;
+          questList.appendChild(item);
+        });
+      }
+
       const list = $('missions-list');
       if (!list) return;
       list.innerHTML = '';
@@ -1943,6 +2397,31 @@
         `;
         list.appendChild(item);
       });
+    },
+
+    // ---------- v1.5 §1 — Story Mode / World Map ----------
+    renderWorldMap() {
+      const list = $('world-map-list');
+      if (!list) return;
+      list.innerHTML = '';
+      const highestLevel = Storage.data.stats.highestLevel;
+      STAGES.forEach((s, i) => {
+        const unlocked = highestLevel >= s.levelRequired || i === 0;
+        const cleared = highestLevel > s.levelRequired || (i === 0 && highestLevel >= s.levelRequired);
+        const item = document.createElement('div');
+        item.className = 'mission-item stage-item' + (unlocked ? '' : ' locked');
+        item.innerHTML = `
+          <div class="mission-row">
+            <span class="mission-icon">${unlocked ? s.icon : '🔒'}</span>
+            <span class="mission-text">
+              <strong>${s.name}</strong>
+              <small>${unlocked ? (cleared ? 'Cleared!' : 'Reach Level ' + s.levelRequired + ' to clear') : 'Reach Level ' + s.levelRequired + ' to unlock'}</small>
+            </span>
+            <span class="mission-state">${cleared ? '✅' : (unlocked ? '▶️' : '')}</span>
+          </div>
+        `;
+        list.appendChild(item);
+      });
     }
   };
 
@@ -1956,6 +2435,7 @@
     UI.init();
     Screens.show('menu');
     DailyReward.checkAndGrant(); // V1.3 §4
+    Quests.checkReset(); // v1.5 §2
     UI.refreshProfile(); // Magic Forest Update — pick up any coins/streak just granted
 
     // Start ambient menu music on first user interaction

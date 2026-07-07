@@ -64,6 +64,8 @@
             <span class="title-line title-line-2">SNAKE ADVENTURE</span>
           </span>
         </h1>
+        <!-- v1.5 §6 — seasonal badge, only visible during an active season window -->
+        <div id="seasonal-badge" class="seasonal-badge"></div>
         <p class="subtitle">Made with ❤️ by Dad Raef</p>
 
         <!-- Magic Forest Update — Player Profile -->
@@ -86,6 +88,9 @@
         <nav class="menu-buttons">
           <button id="btn-play" class="btn btn-primary btn-lg">
             <span class="btn-icon">▶️</span> Play Adventure
+          </button>
+          <button id="btn-worldmap" class="btn btn-secondary">
+            <span class="btn-icon">🌍</span> World Map
           </button>
           <button id="btn-shop" class="btn btn-secondary">
             <span class="btn-icon">🛍️</span> Snake Shop
@@ -167,6 +172,36 @@
           </label>
         </div>
 
+        <!-- v1.5 §8 — Accessibility -->
+        <div class="settings-row">
+          <span class="settings-label">🔠 Large UI Mode</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-large-ui">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">🎨 Color Friendly Mode</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-color-friendly">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">◐ High Contrast</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-high-contrast">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">👆 Bigger Touch Buttons</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-big-buttons">
+            <span class="slider"></span>
+          </label>
+        </div>
+
         <button id="btn-reset-score" class="btn btn-warning">🗑️ Reset High Score</button>
         <button id="btn-settings-back" class="btn btn-secondary">⬅️ Back</button>
       </div>
@@ -192,6 +227,9 @@
         <h2 class="panel-title">Character Shop</h2>
         <div class="shop-balance">🪙 Coins: <strong id="shop-coin-balance">0</strong></div>
         <div class="shop-grid" id="shop-grid"><!-- filled in by game.js --></div>
+        <!-- v1.5 §3 — Companion Pets -->
+        <h2 class="panel-title" style="font-size:18px; margin-top:10px;">🐾 Companion Pets</h2>
+        <div class="shop-grid" id="pet-shop-grid"><!-- filled in by game.js --></div>
         <button id="btn-shop-back" class="btn btn-secondary">⬅️ Back</button>
       </div>
     </section>
@@ -219,6 +257,11 @@
         <!-- v1.4 additions -->
         <div class="settings-row"><span class="settings-label">💫 Total XP</span><strong id="stat-xp">0</strong></div>
         <div class="settings-row"><span class="settings-label">🏅 Achievements</span><strong id="stat-achievements-done">0 / 0</strong></div>
+        <!-- v1.5 §5 — collectibles -->
+        <div class="settings-row collectibles-row">
+          <span class="settings-label">✨ Collectibles</span>
+          <span id="stat-collectibles" class="collectibles-chips"></span>
+        </div>
         <button id="btn-stats-back" class="btn btn-secondary" style="margin-top:14px;">⬅️ Back</button>
       </div>
     </section>
@@ -227,8 +270,19 @@
     <section id="screen-missions" class="screen">
       <div class="menu-card">
         <h2 class="panel-title">🗺️ Mission Center</h2>
+        <!-- v1.5 §2 — Daily/Weekly Quests -->
+        <div class="mission-list" id="quests-list" style="margin-bottom:10px;"><!-- filled in by game.js --></div>
         <div class="mission-list" id="missions-list"><!-- filled in by game.js --></div>
         <button id="btn-missions-back" class="btn btn-secondary">⬅️ Back</button>
+      </div>
+    </section>
+
+    <!-- ============ V1.5 §1: WORLD MAP (STORY MODE) SCREEN ============ -->
+    <section id="screen-worldmap" class="screen">
+      <div class="menu-card">
+        <h2 class="panel-title">🌍 Magic Forest</h2>
+        <div class="mission-list" id="world-map-list"><!-- filled in by game.js --></div>
+        <button id="btn-worldmap-back" class="btn btn-secondary">⬅️ Back</button>
       </div>
     </section>
 
@@ -278,6 +332,7 @@
       <div class="overlay-card">
         <h2 class="panel-title">Paused ⏸️</h2>
         <button id="btn-resume" class="btn btn-primary">▶️ Resume</button>
+        <button id="btn-photo-mode" class="btn btn-secondary">📷 Photo Mode</button>
         <button id="btn-restart" class="btn btn-secondary">🔄 Restart</button>
         <button id="btn-pause-menu" class="btn btn-secondary">🏠 Main Menu</button>
       </div>
@@ -336,6 +391,17 @@
         <p class="daily-reward-amount" id="daily-reward-amount">+20 Coins</p>
         <p class="daily-reward-streak" id="daily-reward-streak">🔥 1-day streak!</p>
         <button id="btn-daily-reward-close" class="btn btn-primary">Yay! 🎉</button>
+      </div>
+    </div>
+
+    <!-- ============ V1.5 §9: SMART TUTORIAL OVERLAY ============ -->
+    <div id="overlay-tutorial" class="overlay">
+      <div class="overlay-card">
+        <h2 class="panel-title">👋 Hi Noah!</h2>
+        <p class="tutorial-text">🕹️ Use the arrow keys, swipe, or the on-screen buttons to steer.</p>
+        <p class="tutorial-text">🍎 Eat fruit to grow and score points.</p>
+        <p class="tutorial-text">🪙 Grab coins and gifts for bonus rewards!</p>
+        <button id="btn-tutorial-close" class="btn btn-primary">Let's Go! 🚀</button>
       </div>
     </div>
 
