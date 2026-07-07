@@ -101,6 +101,9 @@
           <button id="btn-achievements" class="btn btn-secondary">
             <span class="btn-icon">🏆</span> Achievements
           </button>
+          <button id="btn-collection" class="btn btn-secondary">
+            <span class="btn-icon">📖</span> Collection Book
+          </button>
           <button id="btn-stats" class="btn btn-secondary">
             <span class="btn-icon">📊</span> My Progress
           </button>
@@ -119,6 +122,58 @@
     </section>
 
     <!-- ============ LEVEL SELECT (part of Play flow) ============ -->
+    <!-- ============ V2.1 §1: GAME MODE SELECTOR ============ -->
+    <section id="screen-mode-select" class="screen">
+      <div class="menu-card">
+        <h2 class="panel-title">Choose Your Mode</h2>
+        <div class="level-grid mode-grid">
+          <button class="level-card mode-card-solo" id="mode-card-solo">
+            <span class="level-emoji">🟢</span>
+            <span class="level-name">Solo Adventure</span>
+            <span class="level-desc">Play by yourself</span>
+          </button>
+          <button class="level-card mode-card-vs" id="mode-card-vs">
+            <span class="level-emoji">🔴</span>
+            <span class="level-name">VS Battle</span>
+            <span class="level-desc">Compete with a friend</span>
+          </button>
+          <button class="level-card mode-card-team" id="mode-card-team">
+            <span class="level-emoji">🔵</span>
+            <span class="level-name">Team Adventure</span>
+            <span class="level-desc">Work together!</span>
+          </button>
+        </div>
+        <button id="mode-select-back" class="btn btn-secondary">⬅️ Back</button>
+      </div>
+    </section>
+
+    <!-- ============ V2.1 §7: PLAYER SETUP / CUSTOMIZATION ============ -->
+    <section id="screen-player-setup" class="screen">
+      <div class="menu-card">
+        <h2 class="panel-title" id="player-setup-title">Player Setup</h2>
+        <div class="player-setup-grid">
+          <div class="player-setup-col">
+            <h3 class="player-setup-heading">Player 1 (Arrow Keys)</h3>
+            <input type="text" id="p1-name-input" class="player-name-input" maxlength="12" placeholder="Noah">
+            <label class="settings-label">Skin</label>
+            <select id="p1-skin-select" class="player-select"></select>
+            <label class="settings-label">Pet</label>
+            <select id="p1-pet-select" class="player-select"></select>
+          </div>
+          <div class="player-setup-col">
+            <h3 class="player-setup-heading">Player 2 (WASD)</h3>
+            <input type="text" id="p2-name-input" class="player-name-input" maxlength="12" placeholder="Dad">
+            <label class="settings-label">Skin</label>
+            <select id="p2-skin-select" class="player-select"></select>
+            <label class="settings-label">Pet</label>
+            <select id="p2-pet-select" class="player-select"></select>
+          </div>
+        </div>
+        <button id="btn-start-multiplayer" class="btn btn-primary btn-lg">▶️ Start!</button>
+        <button id="player-setup-back" class="btn btn-secondary">⬅️ Back</button>
+      </div>
+    </section>
+
     <section id="screen-levels" class="screen">
       <div class="menu-card">
         <h2 class="panel-title">Choose Your Adventure</h2>
@@ -262,6 +317,14 @@
           <span class="settings-label">✨ Collectibles</span>
           <span id="stat-collectibles" class="collectibles-chips"></span>
         </div>
+        <!-- v2.1 §9 — Family Statistics -->
+        <h3 class="panel-title" style="font-size:16px; margin-top:12px;">👨‍👧 Family Statistics</h3>
+        <div class="settings-row"><span class="settings-label">🎮 Games Together</span><strong id="fs-games-together">0</strong></div>
+        <div class="settings-row"><span class="settings-label">🏆 VS Wins (P1-P2)</span><strong id="fs-vs-wins">0 - 0 (0 ties)</strong></div>
+        <div class="settings-row"><span class="settings-label">❤️ Team Wins</span><strong id="fs-team-wins">0</strong></div>
+        <div class="settings-row"><span class="settings-label">⏱️ Longest Survival</span><strong id="fs-longest-survival">0s</strong></div>
+        <div class="settings-row"><span class="settings-label">🍎 Fruits Together</span><strong id="fs-fruits-together">0</strong></div>
+        <div class="settings-row"><span class="settings-label">🪙 Coins Together</span><strong id="fs-coins-together">0</strong></div>
         <button id="btn-stats-back" class="btn btn-secondary" style="margin-top:14px;">⬅️ Back</button>
       </div>
     </section>
@@ -283,6 +346,16 @@
         <h2 class="panel-title">🌍 Magic Forest</h2>
         <div class="mission-list" id="world-map-list"><!-- filled in by game.js --></div>
         <button id="btn-worldmap-back" class="btn btn-secondary">⬅️ Back</button>
+      </div>
+    </section>
+
+    <!-- ============ V2.0 §5: COLLECTION BOOK SCREEN ============ -->
+    <section id="screen-collection" class="screen">
+      <div class="menu-card">
+        <h2 class="panel-title">📖 Collection Book</h2>
+        <p class="collection-percent" id="collection-percent">0% Complete (0/0)</p>
+        <div class="collection-book" id="collection-list"><!-- filled in by game.js --></div>
+        <button id="btn-collection-back" class="btn btn-secondary">⬅️ Back</button>
       </div>
     </section>
 
@@ -323,6 +396,60 @@
           <button class="touch-btn touch-left" data-dir="left">⬅️</button>
           <button class="touch-btn touch-down" data-dir="down">⬇️</button>
           <button class="touch-btn touch-right" data-dir="right">➡️</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ V2.1: LOCAL MULTIPLAYER GAME SCREEN ============ -->
+    <section id="screen-multiplayer" class="screen">
+      <div class="game-hud">
+        <div class="multi-hud-group hidden" id="multi-hud-vs">
+          <div class="hud-pill hud-pill-p1">🟢 <span id="hud-p1-score">0</span></div>
+          <div class="hud-pill hud-pill-p2">🔵 <span id="hud-p2-score">0</span></div>
+        </div>
+        <div class="multi-hud-group hidden" id="multi-hud-team">
+          <div class="hud-pill">❤️ Team: <span id="hud-team-score-multi">0 / 10000</span></div>
+        </div>
+        <button id="btn-multi-pause" class="hud-btn" aria-label="Pause">⏸️</button>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="multi-canvas"></canvas>
+        <div id="multi-countdown-overlay" class="countdown-overlay">
+          <span id="multi-countdown-number">3</span>
+        </div>
+        <div id="multi-team-banner" class="mission-banner">🎯 Mission Complete!</div>
+      </div>
+
+      <!-- v2.1 §6 — quick emote clusters, one per player -->
+      <div class="emote-row emote-row-p1">
+        <button class="emote-btn" data-player="p1" data-emote="😀">😀</button>
+        <button class="emote-btn" data-player="p1" data-emote="👍">👍</button>
+        <button class="emote-btn" data-player="p1" data-emote="🎉">🎉</button>
+      </div>
+      <div class="emote-row emote-row-p2">
+        <button class="emote-btn" data-player="p2" data-emote="😂">😂</button>
+        <button class="emote-btn" data-player="p2" data-emote="❤️">❤️</button>
+        <button class="emote-btn" data-player="p2" data-emote="WOW!">WOW!</button>
+      </div>
+
+      <!-- v2.1 §2 — split-screen touch controls: Player 1 bottom-left, Player 2 bottom-right -->
+      <div class="split-touch-controls">
+        <div class="touch-controls split-touch-p1">
+          <button class="touch-btn touch-up" data-multi-player="p1" data-dir="up">⬆️</button>
+          <div class="touch-mid">
+            <button class="touch-btn touch-left" data-multi-player="p1" data-dir="left">⬅️</button>
+            <button class="touch-btn touch-down" data-multi-player="p1" data-dir="down">⬇️</button>
+            <button class="touch-btn touch-right" data-multi-player="p1" data-dir="right">➡️</button>
+          </div>
+        </div>
+        <div class="touch-controls split-touch-p2">
+          <button class="touch-btn touch-up" data-multi-player="p2" data-dir="up">⬆️</button>
+          <div class="touch-mid">
+            <button class="touch-btn touch-left" data-multi-player="p2" data-dir="left">⬅️</button>
+            <button class="touch-btn touch-down" data-multi-player="p2" data-dir="down">⬇️</button>
+            <button class="touch-btn touch-right" data-multi-player="p2" data-dir="right">➡️</button>
+          </div>
         </div>
       </div>
     </section>
@@ -384,6 +511,51 @@
       </div>
     </div>
 
+    <!-- ============ V2.1: MULTIPLAYER PAUSE OVERLAY ============ -->
+    <div id="overlay-multi-pause" class="overlay">
+      <div class="overlay-card">
+        <h2 class="panel-title">Paused ⏸️</h2>
+        <button id="btn-multi-resume" class="btn btn-primary">▶️ Resume</button>
+        <button id="btn-multi-restart" class="btn btn-secondary">🔄 Restart</button>
+        <button id="btn-multi-pause-menu" class="btn btn-secondary">🏠 Main Menu</button>
+      </div>
+    </div>
+
+    <!-- ============ V2.1 §3: VS WINNER OVERLAY ============ -->
+    <div id="overlay-vs-winner" class="overlay">
+      <div class="overlay-card">
+        <h2 class="panel-title" id="vs-winner-title">🏆 Winner!</h2>
+        <div class="gameover-scores">
+          <div class="score-box">
+            <span class="score-label">🟢 P1 Score</span>
+            <span id="vs-winner-p1-score" class="score-value">0</span>
+          </div>
+          <div class="score-box">
+            <span class="score-label">🔵 P2 Score</span>
+            <span id="vs-winner-p2-score" class="score-value">0</span>
+          </div>
+        </div>
+        <button id="btn-vs-play-again" class="btn btn-primary">🔁 Play Again</button>
+        <button id="btn-vs-menu" class="btn btn-secondary">🏠 Main Menu</button>
+      </div>
+    </div>
+
+    <!-- ============ V2.1 §4: TEAM VICTORY OVERLAY ============ -->
+    <div id="overlay-team-victory" class="overlay">
+      <div class="overlay-card">
+        <h2 class="panel-title" id="team-victory-title">❤️ Team Victory!</h2>
+        <p class="tutorial-text" id="team-victory-subtitle">You did it together!</p>
+        <div class="gameover-scores">
+          <div class="score-box">
+            <span class="score-label">⭐ Team Score</span>
+            <span id="team-victory-score" class="score-value">0 / 10000</span>
+          </div>
+        </div>
+        <button id="btn-team-play-again" class="btn btn-primary">🔁 Play Again</button>
+        <button id="btn-team-menu" class="btn btn-secondary">🏠 Main Menu</button>
+      </div>
+    </div>
+
     <!-- ============ V1.3: DAILY REWARD OVERLAY ============ -->
     <div id="overlay-daily-reward" class="overlay">
       <div class="overlay-card">
@@ -411,6 +583,14 @@
   <canvas id="fx-canvas"></canvas>
   <!-- Visual Evolution — brief celebratory screen flash (milestones/level-ups) -->
   <div id="screen-flash" class="screen-flash" aria-hidden="true"></div>
+
+  <!-- ============ V2.0 §1: CINEMATIC INTRO (first launch only) ============ -->
+  <div id="cinematic-intro" class="cinematic-intro">
+    <div class="cinematic-sky"></div>
+    <div class="cinematic-logo">🐍</div>
+    <h1 class="cinematic-title">NOAH SNAKE ADVENTURE</h1>
+    <p class="cinematic-tap">✨ Press Anywhere To Start ✨</p>
+  </div>
 
   <script src="game.js"></script>
 </body>

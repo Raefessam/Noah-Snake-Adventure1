@@ -31,6 +31,7 @@
      value never crashes the whole save file.
      =========================================================== */
   const STORAGE_KEY = 'noahSnakeAdventure.save.v1';
+  const SAVE_VERSION = 2; // v2.0 §11 — bumped when the save shape changes
 
   const Storage = {
     defaults: {
@@ -57,6 +58,23 @@
       accessibility: { largeUI: false, colorFriendly: false, highContrast: false, bigButtons: false },
       tutorialSeen: false,
       dailyQuest: { date: 0, progress: 0, claimed: false },
+      // v2.0 §6 — Pet Evolution: per-pet XP/stage, keyed by pet id
+      petProgress: {},
+      cinematicSeen: false, // v2.0 §1
+      // v2.1 — Family Edition
+      familyStats: {
+        gamesPlayedTogether: 0,
+        vsWins: { p1: 0, p2: 0, ties: 0 },
+        teamWins: 0,
+        longestTeamSurvivalSec: 0,
+        totalFruitsTogether: 0,
+        totalCoinsTogether: 0
+      },
+      completedCoopMissions: [],
+      players: {
+        p1: { name: 'Noah', skin: 'green', pet: 'fox', color: '#4CAF50' },
+        p2: { name: 'Dad', skin: 'blue', pet: 'panda', color: '#2E6FD9' }
+      },
       weeklyQuest: { weekStart: 0, progress: 0, claimed: false },
       stats: {
         gamesPlayed: 0,
@@ -69,9 +87,27 @@
     },
     data: null,
     load() {
+      // v2.0 §11 — try the primary save; if it's missing/corrupt, fall back
+      // to the automatic backup before ever touching defaults, so a single
+      // bad write can never wipe out real progress.
+      const tryParse = (key) => {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return null;
+          const obj = JSON.parse(raw);
+          return (obj && typeof obj === 'object') ? obj : null;
+        } catch (e) { return null; }
+      };
+
+      let parsed = tryParse(STORAGE_KEY);
+      let usedBackup = false;
+      if (!parsed) {
+        parsed = tryParse(STORAGE_KEY + '.backup');
+        usedBackup = !!parsed;
+      }
+      parsed = parsed || {};
+
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        const parsed = raw ? JSON.parse(raw) : {};
         this.data = { ...this.defaults, ...parsed };
         // Merge nested "stats" so an old save missing a new stat field
         // still gets sensible defaults instead of losing the whole object.
@@ -80,11 +116,23 @@
         this.data.accessibility = { ...this.defaults.accessibility, ...(parsed.accessibility || {}) };
         this.data.dailyQuest = { ...this.defaults.dailyQuest, ...(parsed.dailyQuest || {}) };
         this.data.weeklyQuest = { ...this.defaults.weeklyQuest, ...(parsed.weeklyQuest || {}) };
+        this.data.petProgress = { ...this.defaults.petProgress, ...(parsed.petProgress || {}) };
+        this.data.familyStats = { ...this.defaults.familyStats, ...(parsed.familyStats || {}) };
+        if (this.data.familyStats.vsWins) {
+          this.data.familyStats.vsWins = { ...this.defaults.familyStats.vsWins, ...(parsed.familyStats && parsed.familyStats.vsWins) };
+        }
+        this.data.players = {
+          p1: { ...this.defaults.players.p1, ...((parsed.players && parsed.players.p1) || {}) },
+          p2: { ...this.defaults.players.p2, ...((parsed.players && parsed.players.p2) || {}) }
+        };
+        if (!Array.isArray(this.data.completedCoopMissions)) this.data.completedCoopMissions = [];
         if (!Array.isArray(this.data.unlockedSkins)) this.data.unlockedSkins = ['green'];
         if (!this.data.unlockedSkins.includes('green')) this.data.unlockedSkins.push('green');
         if (!Array.isArray(this.data.completedMissions)) this.data.completedMissions = [];
         if (!Array.isArray(this.data.unlockedPets)) this.data.unlockedPets = ['fox'];
         if (!Array.isArray(this.data.collectibleSetsCompleted)) this.data.collectibleSetsCompleted = [];
+        this.data.saveVersion = SAVE_VERSION; // v2.0 §11 — for future migrations
+        if (usedBackup) this.save(); // repair the primary copy immediately
       } catch (e) {
         this.data = { ...this.defaults, stats: { ...this.defaults.stats } };
       }
@@ -92,7 +140,11 @@
     },
     save() {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+        const json = JSON.stringify(this.data);
+        localStorage.setItem(STORAGE_KEY, json);
+        // v2.0 §11 — keep a rolling backup so a corrupted primary write
+        // (e.g. the tab closing mid-write) can never lose real progress.
+        localStorage.setItem(STORAGE_KEY + '.backup', json);
       } catch (e) { /* storage unavailable — game still works, just won't persist */ }
     },
     set(key, value) {
@@ -196,6 +248,59 @@
     weekKey() {
       // Number of full weeks since epoch — changes once every 7 days
       return Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000));
+    },
+
+    // ---------- v2.0 §6 — Pet Evolution ----------
+    addPetXp(petId, amount) {
+      if (!this.data.petProgress[petId]) this.data.petProgress[petId] = { xp: 0 };
+      this.data.petProgress[petId].xp += amount;
+      this.save();
+    },
+    getPetStage(petId) {
+      const xp = (this.data.petProgress[petId] && this.data.petProgress[petId].xp) || 0;
+      if (xp >= 400) return 2; // Adult
+      if (xp >= 120) return 1; // Young
+      return 0; // Baby
+    },
+
+    // ---------- v2.1 §9 — Family Statistics ----------
+    recordFamilyGame() {
+      this.data.familyStats.gamesPlayedTogether++;
+      this.save();
+    },
+    recordVsWin(who) { // 'p1' | 'p2' | 'ties'
+      this.data.familyStats.vsWins[who]++;
+      this.save();
+    },
+    recordTeamWin() {
+      this.data.familyStats.teamWins++;
+      this.save();
+    },
+    recordTeamSurvival(seconds) {
+      if (seconds > this.data.familyStats.longestTeamSurvivalSec) {
+        this.data.familyStats.longestTeamSurvivalSec = seconds;
+      }
+      this.save();
+    },
+    addFamilyFruits(n) {
+      this.data.familyStats.totalFruitsTogether += n;
+      this.save();
+    },
+    addFamilyCoins(n) {
+      this.data.familyStats.totalCoinsTogether += n;
+      this.save();
+    },
+    completeCoopMission(id) {
+      if (!this.data.completedCoopMissions.includes(id)) {
+        this.data.completedCoopMissions.push(id);
+        this.save();
+        return true;
+      }
+      return false;
+    },
+    setPlayerProfile(who, key, value) {
+      this.data.players[who][key] = value;
+      this.save();
     }
   };
   Storage.load();
@@ -326,7 +431,7 @@
      (pause, game over).
      =========================================================== */
   const Screens = {
-    all: ['menu', 'levels', 'settings', 'credits', 'game', 'shop', 'achievements', 'stats', 'missions', 'worldmap'],
+    all: ['menu', 'levels', 'settings', 'credits', 'game', 'shop', 'achievements', 'stats', 'missions', 'worldmap', 'collection', 'mode-select', 'player-setup', 'multiplayer'],
     show(name) {
       this.all.forEach((s) => $(`screen-${s}`).classList.toggle('active', s === name));
     },
@@ -490,6 +595,16 @@
     el.classList.add('flash');
   };
 
+  // v2.0 §7 — Smart Camera: a tiny, gentle zoom pulse for celebrations.
+  // Deliberately subtle (a few % scale, <1s) so it never feels jarring.
+  const smartCameraPulse = () => {
+    const wrap = $('game-canvas-wrap');
+    if (!wrap || document.body.classList.contains('reduced-motion')) return;
+    wrap.classList.remove('celebrate-zoom');
+    void wrap.offsetWidth;
+    wrap.classList.add('celebrate-zoom');
+  };
+
   /* ===========================================================
      V1.4 §5 — WORLD EVENTS
      Random, purely-decorative background flourishes during gameplay.
@@ -577,6 +692,7 @@
       FX.confetti(90, ['#FFD700', '#FFF6C9', '#FFC300', '#FFFFFF']);
       FX.starBurst(36);
       flashScreen(); // Visual Evolution §9
+      smartCameraPulse(); // v2.0 §7
       banner.classList.add('show');
       clearTimeout(this.timer);
       this.timer = setTimeout(() => banner.classList.remove('show'), 3000);
@@ -607,6 +723,7 @@
       FX.starBurst(26);
       setTimeout(() => FX.starBurst(20), 220); // Visual Evolution — a second burst for a "fireworks" feel
       flashScreen(); // Visual Evolution §9
+      smartCameraPulse(); // v2.0 §7
       banner.classList.add('show');
       clearTimeout(this.timer);
       this.timer = setTimeout(() => banner.classList.remove('show'), 2800);
@@ -726,7 +843,13 @@
     double:   { icon: '✨', name: 'Double Score', color: '#FFD700', duration: 8000 },
     freeze:   { icon: '❄️', name: 'Freeze Time',  color: '#8ED1FC', duration: 5000 },
     radar:    { icon: '📡', name: 'Fruit Radar',  color: '#6FE08A', duration: 8000 },
-    tiny:     { icon: '🔬', name: 'Tiny Snake',   color: '#FF6F91', duration: 8000 }
+    tiny:     { icon: '🔬', name: 'Tiny Snake',   color: '#FF6F91', duration: 8000 },
+    // v2.0 §4 — Advanced Powerups
+    ghost:      { icon: '👻', name: 'Ghost Mode',    color: '#C9C9E8', duration: 8000 },
+    doubleCoin: { icon: '🪙', name: 'Double Coins',  color: '#FFC93C', duration: 10000 },
+    doubleXp:   { icon: '💫', name: 'Double XP',     color: '#7FE0D9', duration: 10000 },
+    rainbow:    { icon: '🌈', name: 'Rainbow Frenzy', color: '#FF6F91', duration: 7000 },
+    mega:       { icon: '🍇', name: 'Mega Fruit',    color: '#FFD700', duration: 0 } // instant effect, no timer
   };
   const POWERUP_KEYS = Object.keys(POWERUPS);
 
@@ -736,12 +859,13 @@
      Never affects gameplay/collision — purely a decorative friend.
      =========================================================== */
   const PETS = {
-    fox:    { name: 'Baby Fox',    icon: '🦊', cost: 0 },
-    panda:  { name: 'Baby Panda',  icon: '🐼', cost: 60 },
-    dragon: { name: 'Baby Dragon', icon: '🐲', cost: 150 },
-    bunny:  { name: 'Baby Bunny',  icon: '🐰', cost: 40 },
-    owl:    { name: 'Baby Owl',    icon: '🦉', cost: 90 }
+    fox:    { name: 'Fox',    icon: '🦊', cost: 0,   stages: ['🦊', '🦊✨', '🦊👑'] },
+    panda:  { name: 'Panda',  icon: '🐼', cost: 60,  stages: ['🐼', '🐼✨', '🐼🎀'] },
+    dragon: { name: 'Dragon', icon: '🐲', cost: 150, stages: ['🐲', '🐲✨', '🐲👑'] },
+    bunny:  { name: 'Bunny',  icon: '🐰', cost: 40,  stages: ['🐰', '🐰✨', '🐰🎀'] },
+    owl:    { name: 'Owl',    icon: '🦉', cost: 90,  stages: ['🦉', '🦉✨', '🦉🎓'] }
   };
+  const PET_STAGE_NAMES = ['Baby', 'Young', 'Adult'];
 
   /* ===========================================================
      V1.5 §4 — EMOTES
@@ -810,6 +934,35 @@
   const WEEKLY_QUEST = { title: 'Play 5 Games This Week', icon: '🗓️', target: 5, reward: { coins: 60, xp: 100 } };
 
   /* ===========================================================
+     V2.1 — FAMILY EDITION (Local Multiplayer)
+     =========================================================== */
+  // §6 — quick tap-to-react emotes, shown as a small bubble above a snake
+  const QUICK_EMOTES = ['😀', '😂', '❤️', '👍', '🎉', 'WOW!'];
+
+  // §8 — Co-op missions, only relevant in Team Adventure mode
+  const COOP_MISSIONS = [
+    { id: 'coop_fruits50', icon: '🍎', title: 'Collect 50 Fruits Together', target: 50,
+      progress: (s) => s.fruits, reward: { coins: 40, xp: 60 } },
+    { id: 'coop_score10000', icon: '⭐', title: 'Reach 10000 Score', target: 10000,
+      progress: (s) => s.score, reward: { coins: 80, xp: 120 } },
+    { id: 'coop_boss', icon: '🐉', title: 'Defeat a Boss Together', target: 1,
+      progress: (s) => s.bossesDefeated, reward: { coins: 100, xp: 150 } },
+    { id: 'coop_coins100', icon: '🪙', title: 'Collect 100 Coins', target: 100,
+      progress: (s) => s.coins, reward: { coins: 50, xp: 60 } }
+  ];
+
+  // §5 — Team Abilities. Each is picked up like a power-up but benefits BOTH
+  // players at once in Team Adventure mode.
+  const TEAM_ABILITIES = {
+    rescue:  { icon: '🛟', name: 'Rescue Shield', color: '#7FB8F0', duration: 10000 },
+    magnet2: { icon: '🧲', name: 'Shared Magnet', color: '#B983FF', duration: 8000 },
+    double2: { icon: '✨', name: 'Team Double Score', color: '#FFD700', duration: 8000 },
+    revive:  { icon: '💖', name: 'Revive Token', color: '#FF6F91', duration: 0 }, // stored, used on crash
+    rainbow2:{ icon: '🌈', name: 'Rainbow Team Boost', color: '#FF6F91', duration: 7000 }
+  };
+  const TEAM_ABILITY_KEYS = Object.keys(TEAM_ABILITIES);
+
+  /* ===========================================================
      6. THE GAME  (Snake + Food + Loop)
      =========================================================== */
   // V1.2 — Better Food System: 6 fruits, each with its own point
@@ -871,6 +1024,7 @@
     activePowerups: {},      // { magnet: expiresAtMs, shield: expiresAtMs, ... }
     chest: null,             // { x, y, bounce } or null — mystery chest on the board
     giantFruit: null,        // { x, y, points, expiresAtMs, ...foodProps } or null — mini-boss
+    bossTriggered: false,    // v2.0 §3 — true once the Boss Fruit has appeared this game
     foodsSincePowerup: 0,
     foodsSinceChest: 0,
     foodsSinceGiant: 0,
@@ -929,6 +1083,7 @@
       this.activePowerups = {};
       this.chest = null;
       this.giantFruit = null;
+      this.bossTriggered = false; // v2.0 §3
       this.foodsSincePowerup = 0;
       this.foodsSinceChest = 0;
       this.foodsSinceGiant = 0;
@@ -1058,16 +1213,20 @@
       newHead.x = (newHead.x + GRID_SIZE) % GRID_SIZE;
       newHead.y = (newHead.y + GRID_SIZE) % GRID_SIZE;
 
-      // Self collision — a v1.4 Shield power-up absorbs one hit instead of ending the game
+      // Self collision — v2.0 Ghost Mode passes through freely; v1.4 Shield absorbs one hit
       if (this.snake.some((s) => s.x === newHead.x && s.y === newHead.y)) {
-        if (this.activePowerups.shield) {
+        if (this.activePowerups.ghost) {
+          // pass straight through — no penalty, no consumption, just a faint sparkle
+          FX.starBurst(2);
+        } else if (this.activePowerups.shield) {
           delete this.activePowerups.shield;
           this.shakeFrames = 8;
           Audio.click();
           FX.confetti(30, ['#7FB8F0', '#FFFFFF']);
           return; // shield absorbed the hit — skip this move, try again next tick
+        } else {
+          return this.endGame();
         }
-        return this.endGame();
       }
 
       this.snake.unshift(newHead);
@@ -1138,9 +1297,11 @@
       Storage.recordFruit(eatenName); // V1.3 §6
 
       // v1.4 §8 — XP gain (independent of score)
-      const xpGain = 5 + Math.round((this.food.points || 100) / 50);
+      let xpGain = 5 + Math.round((this.food.points || 100) / 50);
+      if (this.activePowerups.doubleXp) xpGain *= 2; // v2.0 §4
       this.xpThisGame += xpGain;
       Storage.addXp(xpGain);
+      Storage.addPetXp(Storage.data.currentPet, xpGain); // v2.0 §6
 
       this.updateHud();
 
@@ -1180,6 +1341,12 @@
         this.level = newLevel;
         LevelUp.show(newLevel);
         Storage.recordLevel(newLevel);
+        // v2.0 §3 — Boss Stage: reaching the Boss Stage level summons a Boss Fruit once per game
+        const bossStage = STAGES[STAGES.length - 1];
+        if (newLevel >= bossStage.levelRequired && !this.bossTriggered) {
+          this.bossTriggered = true;
+          this.summonBossFruit();
+        }
       }
 
       this.placeFood();
@@ -1214,15 +1381,16 @@
 
     collectCoin() {
       this.coin = null;
-      Storage.addCoins(1);
-      this.coinsThisGame++;
+      const amount = this.activePowerups.doubleCoin ? 2 : 1; // v2.0 §4
+      Storage.addCoins(amount);
+      this.coinsThisGame += amount;
       Audio.coin();
       this.updateHud();
       const rect = this.canvas.getBoundingClientRect();
       const px = rect.left + (this.snake[0].x + 0.5) * this.cell;
       const py = rect.top + (this.snake[0].y + 0.5) * this.cell;
       FX.burst(px, py, ['#FFD700', '#FFF6C9', '#FFFFFF']);
-      FX.floatText(px, py, '+1 🪙', '#FFD700');
+      FX.floatText(px, py, `+${amount} 🪙`, '#FFD700');
       this.checkNewAchievements(); // Visual Evolution §11
     },
 
@@ -1235,6 +1403,7 @@
         Audio.achievement();
         const rect = this.canvas.getBoundingClientRect();
         showEmote(rect.left + rect.width / 2, rect.top + rect.height * 0.3); // v1.5 §4
+        this.shakeFrames = Math.max(this.shakeFrames, 4); // v2.0 §7 — a very soft shake, not the harsh game-over one
       }
       this.lastAchievementCount = count;
     },
@@ -1281,7 +1450,7 @@
 
     collectPowerup() {
       const def = POWERUPS[this.powerup.type];
-      this.activePowerups[this.powerup.type] = Date.now() + def.duration;
+      const type = this.powerup.type;
       Audio.levelUp();
       const rect = this.canvas.getBoundingClientRect();
       const px = rect.left + (this.powerup.x + 0.5) * this.cell;
@@ -1290,11 +1459,29 @@
       FX.floatText(px, py, def.name, def.color);
       this.powerup = null;
 
+      if (type === 'mega') {
+        // v2.0 §4 — Mega Fruit: instant effect, summons a bonus giant fruit right away
+        if (!this.giantFruit) this.maybeSpawnGiantFruitNow();
+      } else {
+        this.activePowerups[type] = Date.now() + def.duration;
+      }
+
       // Tiny Snake — shrink immediately down to a manageable length
       if (def === POWERUPS.tiny && this.snake.length > 4) {
         this.snake.length = 4;
       }
       this.updateHud();
+    },
+
+    // v2.0 §4 — used by the Mega Fruit powerup to force-spawn a (non-boss) giant fruit
+    maybeSpawnGiantFruitNow() {
+      let pos, tries = 0;
+      do {
+        pos = { x: randInt(0, GRID_SIZE - 1), y: randInt(0, GRID_SIZE - 1) };
+        tries++;
+      } while (tries < 50 && this.occupiedByAnything(pos));
+      const kind = FOODS[randInt(0, FOODS.length - 1)];
+      this.giantFruit = { ...pos, ...kind, points: 1000, bounce: 0, expiresAt: Date.now() + 8000 };
     },
 
     // ---------- v1.4 §3 — MYSTERY CHESTS ----------
@@ -1356,6 +1543,27 @@
       }
     },
 
+    // v2.0 §3 — Boss Stage: a bigger, longer-lived, more valuable encounter
+    // that always appears the moment the Boss Stage level is reached.
+    summonBossFruit() {
+      let pos, tries = 0;
+      do {
+        pos = { x: randInt(0, GRID_SIZE - 1), y: randInt(0, GRID_SIZE - 1) };
+        tries++;
+      } while (tries < 50 && this.occupiedByAnything(pos));
+      this.giantFruit = {
+        ...pos, name: 'boss', emoji: '🐉', color: '#FFD700',
+        points: 2500, bounce: 0, expiresAt: Date.now() + 12000, isBoss: true
+      };
+      Audio.achievement();
+      const banner = $('mission-banner');
+      if (banner) {
+        banner.innerHTML = '🐉 A Boss has appeared! <br> Catch it for a huge reward!';
+        banner.classList.add('show');
+        setTimeout(() => banner.classList.remove('show'), 3200);
+      }
+    },
+
     eatGiantFruit() {
       const points = this.activePowerups.double ? this.giantFruit.points * 2 : this.giantFruit.points;
       const previousScore = this.score;
@@ -1365,15 +1573,27 @@
       const xpGain = 50;
       this.xpThisGame += xpGain;
       Storage.addXp(xpGain);
+      Storage.addPetXp(Storage.data.currentPet, xpGain); // v2.0 §6
 
       const rect = this.canvas.getBoundingClientRect();
       const px = rect.left + (this.giantFruit.x + 0.5) * this.cell;
       const py = rect.top + (this.giantFruit.y + 0.5) * this.cell;
-      FX.confetti(160, ['#FFD700', '#FFF6C9', '#FFC300', '#FFFFFF']);
-      FX.starBurst(40);
+      const isBoss = this.giantFruit.isBoss; // v2.0 §3
+      FX.confetti(isBoss ? 240 : 160, ['#FFD700', '#FFF6C9', '#FFC300', '#FFFFFF']);
+      FX.starBurst(isBoss ? 60 : 40);
       FX.floatText(px, py, `+${points}!!`, '#FFD700');
       Audio.victory();
       flashScreen();
+      if (isBoss) {
+        setTimeout(flashScreen, 200); // a second flash for a bigger victory feel
+        showEmote(px, py - 40);
+        const banner = $('mission-banner');
+        if (banner) {
+          banner.innerHTML = '🏆 Boss Defeated! <br> Amazing Noah!';
+          banner.classList.add('show');
+          setTimeout(() => banner.classList.remove('show'), 3200);
+        }
+      }
       this.glowFrames = 20;
       this.giantFruit = null;
       this.snake.pop(); // eating the giant fruit doesn't grow the snake (balance)
@@ -1599,23 +1819,24 @@
       const g = this.giantFruit;
       const cx = g.x * this.cell + this.cell / 2;
       const cy = g.y * this.cell + this.cell / 2;
-      const timeLeft = clamp((g.expiresAt - Date.now()) / 7000, 0, 1);
+      const totalMs = g.isBoss ? 12000 : 7000; // v2.0 §3 — fixed: ring now matches the real duration
+      const timeLeft = clamp((g.expiresAt - Date.now()) / totalMs, 0, 1);
 
       ctx.save();
-      ctx.strokeStyle = '#FFD700';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = g.isBoss ? '#FF6F61' : '#FFD700';
+      ctx.lineWidth = g.isBoss ? 4 : 3;
       ctx.beginPath();
-      ctx.arc(cx, cy, this.cell * 0.85, -Math.PI / 2, -Math.PI / 2 + timeLeft * Math.PI * 2);
+      ctx.arc(cx, cy, this.cell * (g.isBoss ? 1.05 : 0.85), -Math.PI / 2, -Math.PI / 2 + timeLeft * Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
       ctx.save();
       ctx.shadowColor = g.color;
-      ctx.shadowBlur = 26;
-      const pulse = 1 + Math.sin(Date.now() / 150) * 0.08;
+      ctx.shadowBlur = g.isBoss ? 34 : 26;
+      const pulse = 1 + Math.sin(Date.now() / 150) * (g.isBoss ? 0.12 : 0.08);
       ctx.translate(cx, cy);
       ctx.scale(pulse, pulse);
-      ctx.font = `${this.cell * 1.5}px serif`;
+      ctx.font = `${this.cell * (g.isBoss ? 1.9 : 1.5)}px serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(g.emoji, 0, 0);
@@ -1647,6 +1868,8 @@
     drawPet(ctx) {
       const petId = Storage.data.currentPet;
       const pet = PETS[petId] || PETS.fox;
+      const stage = Storage.getPetStage(petId); // v2.0 §6
+      const icon = (pet.stages && pet.stages[stage]) || pet.icon;
       const followPos = this.petTrail[Math.min(3, this.petTrail.length - 1)] || this.snake[this.snake.length - 1];
       if (!followPos) return;
       const cx = followPos.x * this.cell + this.cell / 2;
@@ -1670,7 +1893,7 @@
       ctx.font = `${this.cell * 0.6 * scale}px serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(pet.icon, cx, cy + bob);
+      ctx.fillText(icon, cx, cy + bob);
       if (label) ctx.fillText(label, cx + this.cell * 0.4, cy - this.cell * 0.4);
       ctx.restore();
     },
@@ -1753,8 +1976,8 @@
         const radius = (isHead ? this.cell * 0.48 : this.cell * 0.42 * (1 - i / (this.snake.length * 2.2))) * breathe;
 
         let bodyColor;
-        if (this.secretMode) {
-          bodyColor = rainbow[i % rainbow.length];
+        if (this.secretMode || this.activePowerups.rainbow) {
+          bodyColor = rainbow[i % rainbow.length]; // v2.0 §4 — Rainbow Frenzy shares the same look as Secret Mode
         } else if (this.glowFrames > 0) {
           bodyColor = '#FFD700';
         } else if (skin.rainbow) {
@@ -1764,7 +1987,7 @@
         }
 
         ctx.save();
-        if (this.glowFrames > 0 || this.secretMode) {
+        if (this.glowFrames > 0 || this.secretMode || this.activePowerups.rainbow) {
           ctx.shadowColor = '#FFD700';
           ctx.shadowBlur = 16;
         } else {
@@ -1913,6 +2136,499 @@
   };
 
   /* ===========================================================
+     V2.1 — LOCAL MULTIPLAYER ENGINE (VS Battle / Team Adventure)
+     A self-contained two-snake engine. Reuses Storage/Audio/FX/
+     FOODS/SKINS/PETS/GRID_SIZE from the solo game, but keeps its
+     own state entirely — Solo Adventure is never touched by this.
+     =========================================================== */
+  const MultiGame = {
+    canvas: null, ctx: null, cell: 20,
+    mode: 'vs', // 'vs' | 'team'
+    stepMs: 160,
+    acc: 0, lastTime: 0, rafId: null,
+    running: false, paused: false,
+    food: null,
+    ability: null,           // shared team-ability pickup on the board
+    activeAbilities: {},     // { rescue: expiresAtMs, magnet2: ..., double2: ..., rainbow2: ... }
+    reviveTokens: 0,         // Team mode — stored Revive Token charges
+    teamStats: { fruits: 0, score: 0, coins: 0, bossesDefeated: 0 },
+    sessionStartTime: 0,
+    coopMissionsAtStart: 0,
+    players: null,
+    emoteBubbles: {},        // { p1: {text, life} }
+
+    init() {
+      this.canvas = $('multi-canvas');
+      this.ctx = this.canvas.getContext('2d');
+      this.resizeCanvas();
+      window.addEventListener('resize', () => this.resizeCanvas());
+    },
+
+    resizeCanvas() {
+      const maxW = window.innerWidth * 0.90;
+      const maxH = window.innerHeight * 0.78;
+      const size = Math.floor(Math.min(maxW, maxH, 640) / GRID_SIZE) * GRID_SIZE;
+      this.cell = size / GRID_SIZE;
+      this.canvas.width = size * devicePixelRatio;
+      this.canvas.height = size * devicePixelRatio;
+      this.canvas.style.width = size + 'px';
+      this.canvas.style.height = size + 'px';
+      this.ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    },
+
+    start(mode) {
+      this.mode = mode;
+      this.stepMs = LEVELS.normal.stepMs;
+      const mid = Math.floor(GRID_SIZE / 2);
+      const prof = Storage.data.players;
+
+      const makePlayer = (key, prof, bodyStart) => ({
+        key, name: prof.name, skin: prof.skin, pet: prof.pet, color: prof.color,
+        body: bodyStart.map((p) => ({ ...p })),
+        dir: { x: 1, y: 0 }, nextDir: { x: 1, y: 0 },
+        score: 0, combo: 0, comboTimer: 0, alive: true, glowFrames: 0
+      });
+
+      this.players = {
+        p1: makePlayer('p1', prof.p1, [{ x: mid - 1, y: mid - 3 }, { x: mid - 2, y: mid - 3 }, { x: mid - 3, y: mid - 3 }]),
+        p2: makePlayer('p2', prof.p2, [{ x: mid - 1, y: mid + 3 }, { x: mid - 2, y: mid + 3 }, { x: mid - 3, y: mid + 3 }])
+      };
+
+      this.ability = null;
+      this.activeAbilities = {};
+      this.reviveTokens = 0;
+      this.teamStats = { fruits: 0, score: 0, coins: 0, bossesDefeated: 0 };
+      this.sessionStartTime = Date.now();
+      this.coopMissionsAtStart = COOP_MISSIONS.filter((m) => Storage.data.completedCoopMissions.includes(m.id)).length;
+      this.emoteBubbles = {};
+      this.placeFood();
+      this.updateHud();
+      $('multi-team-banner') && $('multi-team-banner').classList.remove('show');
+      Storage.recordFamilyGame(); // v2.1 §9
+      this.paused = false;
+      this.running = false;
+      this.runCountdown();
+    },
+
+    runCountdown() {
+      const overlay = $('multi-countdown-overlay');
+      const numEl = $('multi-countdown-number');
+      overlay.classList.add('active');
+      let n = 3;
+      numEl.textContent = n;
+      Audio.click();
+      const tick = () => {
+        n--;
+        if (n > 0) {
+          numEl.textContent = n;
+          Audio.click();
+          setTimeout(tick, 700);
+        } else {
+          numEl.textContent = 'GO!';
+          Audio.levelUp();
+          setTimeout(() => {
+            overlay.classList.remove('active');
+            this.running = true;
+            this.lastTime = performance.now();
+            this.acc = 0;
+            this.loop(this.lastTime);
+          }, 500);
+        }
+      };
+      setTimeout(tick, 700);
+    },
+
+    occupied(pos) {
+      const onBody = (p) => p.alive && p.body.some((s) => s.x === pos.x && s.y === pos.y);
+      if (onBody(this.players.p1) || onBody(this.players.p2)) return true;
+      if (this.food && this.food.x === pos.x && this.food.y === pos.y) return true;
+      if (this.ability && this.ability.x === pos.x && this.ability.y === pos.y) return true;
+      return false;
+    },
+
+    placeFood() {
+      let pos, tries = 0;
+      do {
+        pos = { x: randInt(0, GRID_SIZE - 1), y: randInt(0, GRID_SIZE - 1) };
+        tries++;
+      } while (tries < 50 && this.occupied(pos));
+      const kind = FOODS[randInt(0, FOODS.length - 1)];
+      this.food = { ...pos, ...kind, bounce: 0 };
+    },
+
+    maybeSpawnAbility() {
+      if (this.mode !== 'team' || this.ability) return; // team abilities only matter in Team Adventure
+      if (Math.random() < 0.12) {
+        let pos, tries = 0;
+        do {
+          pos = { x: randInt(0, GRID_SIZE - 1), y: randInt(0, GRID_SIZE - 1) };
+          tries++;
+        } while (tries < 50 && this.occupied(pos));
+        const type = TEAM_ABILITY_KEYS[randInt(0, TEAM_ABILITY_KEYS.length - 1)];
+        this.ability = { type, ...pos, bounce: 0 };
+      }
+    },
+
+    collectAbility(byPlayer) {
+      const def = TEAM_ABILITIES[this.ability.type];
+      const type = this.ability.type;
+      this.ability = null;
+      Audio.levelUp();
+      const rect = this.canvas.getBoundingClientRect();
+      const px = rect.left + rect.width / 2, py = rect.top + rect.height / 2;
+      FX.confetti(50, [def.color, '#FFFFFF']);
+      FX.floatText(px, py, def.name + '!', def.color);
+      if (type === 'revive') {
+        this.reviveTokens++; // stored for later, not time-based
+      } else {
+        this.activeAbilities[type] = Date.now() + def.duration;
+      }
+      this.updateHud();
+    },
+
+    setDirection(who, x, y) {
+      const p = this.players && this.players[who];
+      if (!p || !p.alive) return;
+      if (p.body.length > 1 && x === -p.dir.x && y === -p.dir.y) return;
+      p.nextDir = { x, y };
+    },
+
+    showEmote(who, text) {
+      this.emoteBubbles[who] = { text, life: 1 };
+    },
+
+    loop(time) {
+      if (!this.running) return;
+      this.rafId = requestAnimationFrame((t) => this.loop(t));
+      const delta = time - this.lastTime;
+      this.lastTime = time;
+      if (this.paused) return;
+
+      this.acc += delta;
+      while (this.acc >= this.stepMs) {
+        this.tick();
+        this.acc -= this.stepMs;
+      }
+      this.render();
+    },
+
+    tick() {
+      const now = Date.now();
+      Object.keys(this.activeAbilities).forEach((k) => {
+        if (this.activeAbilities[k] <= now) delete this.activeAbilities[k];
+      });
+
+      const p1 = this.players.p1, p2 = this.players.p2;
+      [p1, p2].forEach((p) => {
+        if (p.comboTimer > 0) { p.comboTimer -= this.stepMs; if (p.comboTimer <= 0) p.combo = 0; }
+        if (p.glowFrames > 0) p.glowFrames--;
+      });
+
+      const alive = [p1, p2].filter((p) => p.alive);
+      if (!alive.length) return;
+
+      const newHeads = {};
+      alive.forEach((p) => {
+        p.dir = p.nextDir;
+        let nh = { x: p.body[0].x + p.dir.x, y: p.body[0].y + p.dir.y };
+        nh.x = (nh.x + GRID_SIZE) % GRID_SIZE;
+        nh.y = (nh.y + GRID_SIZE) % GRID_SIZE;
+        newHeads[p.key] = nh;
+      });
+
+      // Collision detection: own body, the other snake, or a head-on crash.
+      // v2.1 Team mode: a Rescue Shield or a stored Revive Token can save a player.
+      const dying = [];
+      alive.forEach((p) => {
+        const nh = newHeads[p.key];
+        const other = p.key === 'p1' ? p2 : p1;
+        const hitSelf = p.body.some((s) => s.x === nh.x && s.y === nh.y);
+        const hitOther = other.alive && other.body.some((s) => s.x === nh.x && s.y === nh.y);
+        const headOn = other.alive && newHeads[other.key] && newHeads[other.key].x === nh.x && newHeads[other.key].y === nh.y;
+        if (hitSelf || hitOther || headOn) dying.push(p.key);
+      });
+
+      dying.forEach((key) => {
+        if (this.mode === 'team' && this.activeAbilities.rescue) {
+          delete this.activeAbilities.rescue; // Rescue Shield saves the first crash this tick
+          FX.confetti(40, ['#7FB8F0', '#FFFFFF']);
+          Audio.click();
+          return;
+        }
+        if (this.mode === 'team' && this.reviveTokens > 0) {
+          this.reviveTokens--;
+          FX.confetti(60, ['#FF6F91', '#FFFFFF']);
+          Audio.achievement();
+          this.showEmote(key, '💖');
+          return;
+        }
+        this.players[key].alive = false;
+        Audio.gameOver();
+      });
+
+      // Move survivors, handle eating
+      alive.forEach((p) => {
+        if (!p.alive) return;
+        const nh = newHeads[p.key];
+        p.body.unshift(nh);
+        if (this.food && nh.x === this.food.x && nh.y === this.food.y) {
+          this.eatFood(p);
+        } else {
+          p.body.pop();
+        }
+        if (this.ability && this.ability.x === nh.x && this.ability.y === nh.y) {
+          this.collectAbility(p.key);
+        }
+      });
+
+      // fade out emote bubbles
+      Object.keys(this.emoteBubbles).forEach((k) => {
+        this.emoteBubbles[k].life -= this.stepMs / 1800;
+        if (this.emoteBubbles[k].life <= 0) delete this.emoteBubbles[k];
+      });
+
+      this.maybeSpawnAbility();
+      this.checkEndConditions();
+    },
+
+    eatFood(p) {
+      let points = this.food.points || 100;
+      p.combo = p.comboTimer > 0 ? p.combo + 1 : 1;
+      p.comboTimer = 2200;
+      if (p.combo >= 2) points += Math.round(points * 0.1 * Math.min(p.combo, 5));
+      if (this.mode === 'team' && this.activeAbilities.double2) points *= 2;
+
+      p.score += points;
+      p.glowFrames = 10;
+      this.teamStats.fruits++;
+      this.teamStats.score = this.players.p1.score + this.players.p2.score;
+      Storage.recordFruit(this.food.name);
+      Storage.addFamilyFruits(1); // v2.1 §9
+      Audio.eatFruit(this.food.pitch || 660);
+
+      const rect = this.canvas.getBoundingClientRect();
+      const px = rect.left + (this.food.x + 0.5) * this.cell;
+      const py = rect.top + (this.food.y + 0.5) * this.cell;
+      FX.burst(px, py, [this.food.color, '#FFD700', '#FFFFFF']);
+      FX.floatText(px, py, `+${points}`, this.food.color);
+
+      // v2.1 — Shared Magnet gently pulls fresh food toward whichever player is closer
+      this.placeFood();
+      if (this.mode === 'team' && this.activeAbilities.magnet2) {
+        const head = p.body[0];
+        const dxf = this.food.x - head.x, dyf = this.food.y - head.y;
+        if (Math.abs(dxf) + Math.abs(dyf) > 6) {
+          this.food.x = clamp(head.x + Math.sign(dxf) * 4, 0, GRID_SIZE - 1);
+          this.food.y = clamp(head.y + Math.sign(dyf) * 4, 0, GRID_SIZE - 1);
+        }
+      }
+      this.updateHud();
+    },
+
+    checkEndConditions() {
+      const p1 = this.players.p1, p2 = this.players.p2;
+      if (this.mode === 'vs') {
+        if (!p1.alive || !p2.alive) this.endVs();
+      } else {
+        const teamScore = p1.score + p2.score;
+        if (!p1.alive && !p2.alive) this.endTeam(false);
+        else if (teamScore >= 10000) this.endTeam(true);
+        this.checkCoopMissions();
+      }
+    },
+
+    checkCoopMissions() {
+      const survivalSec = Math.round((Date.now() - this.sessionStartTime) / 1000);
+      Storage.recordTeamSurvival(survivalSec);
+      const statsSnapshot = {
+        fruits: this.teamStats.fruits,
+        score: this.players.p1.score + this.players.p2.score,
+        coins: this.teamStats.coins,
+        bossesDefeated: this.teamStats.bossesDefeated
+      };
+      COOP_MISSIONS.forEach((m) => {
+        if (Storage.data.completedCoopMissions.includes(m.id)) return;
+        if (m.progress(statsSnapshot) >= m.target) {
+          if (Storage.completeCoopMission(m.id)) {
+            Storage.addCoins(m.reward.coins);
+            Storage.addXp(m.reward.xp);
+            Audio.achievement();
+            FX.confetti(90, ['#FFD700', '#6FE08A']);
+            const banner = $('multi-team-banner');
+            if (banner) {
+              banner.innerHTML = `🎯 Co-op Mission! <br> ${m.title} <br> +${m.reward.coins}🪙 +${m.reward.xp}XP`;
+              banner.classList.add('show');
+              setTimeout(() => banner.classList.remove('show'), 3200);
+            }
+          }
+        }
+      });
+    },
+
+    endVs() {
+      this.running = false;
+      cancelAnimationFrame(this.rafId);
+      const p1 = this.players.p1, p2 = this.players.p2;
+      let title, who;
+      if (!p1.alive && !p2.alive) { title = "🤝 It's a Tie!"; who = 'ties'; Audio.gameOver(); }
+      else { const winner = p1.alive ? p1 : p2; who = p1.alive ? 'p1' : 'p2'; title = `🏆 ${winner.name} Wins!`; Audio.victory(); FX.confetti(180); }
+      Storage.recordVsWin(who);
+      $('vs-winner-title').textContent = title;
+      $('vs-winner-p1-score').textContent = p1.score;
+      $('vs-winner-p2-score').textContent = p2.score;
+      setTimeout(() => Screens.overlay('vs-winner', true), 260);
+    },
+
+    endTeam(success) {
+      this.running = false;
+      cancelAnimationFrame(this.rafId);
+      const p1 = this.players.p1, p2 = this.players.p2;
+      const teamScore = p1.score + p2.score;
+      Storage.addFamilyCoins(this.teamStats.coins);
+      if (success) {
+        Storage.recordTeamWin();
+        $('team-victory-title').textContent = '❤️ Team Victory!';
+        $('team-victory-subtitle').textContent = `${p1.name} & ${p2.name} did it together!`;
+        Audio.victory();
+        FX.confetti(220);
+      } else {
+        $('team-victory-title').textContent = '💪 So Close, Team!';
+        $('team-victory-subtitle').textContent = 'Try again together!';
+        Audio.gameOver();
+      }
+      $('team-victory-score').textContent = `${teamScore} / 10000`;
+      setTimeout(() => Screens.overlay('team-victory', true), 260);
+    },
+
+    updateHud() {
+      const p1 = this.players.p1, p2 = this.players.p2;
+      if (this.mode === 'vs') {
+        $('multi-hud-vs').classList.remove('hidden');
+        $('multi-hud-team').classList.add('hidden');
+        $('hud-p1-score').textContent = p1.score;
+        $('hud-p2-score').textContent = p2.score;
+      } else {
+        $('multi-hud-vs').classList.add('hidden');
+        $('multi-hud-team').classList.remove('hidden');
+        $('hud-team-score-multi').textContent = `${p1.score + p2.score} / 10000`;
+      }
+    },
+
+    pause() { this.paused = true; Audio.stopMusic(); this.render(); },
+    resume() { this.paused = false; this.lastTime = performance.now(); Audio.startMusic('game'); },
+    stop() {
+      this.running = false;
+      if (this.rafId) cancelAnimationFrame(this.rafId);
+      Audio.stopMusic();
+    },
+
+    /* ---------- Rendering ---------- */
+    render() {
+      const ctx = this.ctx;
+      const size = this.canvas.width / devicePixelRatio;
+      ctx.clearRect(0, 0, size, size);
+      this.drawBoard(ctx);
+      if (this.ability) this.drawAbility(ctx);
+      if (this.food) this.drawFood(ctx);
+      this.drawSnake(ctx, this.players.p1);
+      this.drawSnake(ctx, this.players.p2);
+      this.drawEmotes(ctx);
+    },
+
+    drawBoard(ctx) {
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          ctx.fillStyle = (x + y) % 2 === 0 ? '#A9E38F' : '#9FDB83';
+          ctx.fillRect(x * this.cell, y * this.cell, this.cell, this.cell);
+        }
+      }
+    },
+
+    drawFood(ctx) {
+      const f = this.food;
+      f.bounce = (f.bounce + 0.15) % (Math.PI * 2);
+      const bounceOffset = Math.sin(f.bounce) * 3;
+      const cx = f.x * this.cell + this.cell / 2;
+      const cy = f.y * this.cell + this.cell / 2 + bounceOffset;
+      ctx.save();
+      ctx.shadowColor = f.color;
+      ctx.shadowBlur = 16;
+      ctx.font = `${this.cell * 0.9}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(f.emoji, cx, cy);
+      ctx.restore();
+    },
+
+    drawAbility(ctx) {
+      const a = this.ability;
+      const def = TEAM_ABILITIES[a.type];
+      a.bounce = (a.bounce + 0.16) % (Math.PI * 2);
+      const cx = a.x * this.cell + this.cell / 2;
+      const cy = a.y * this.cell + this.cell / 2 + Math.sin(a.bounce) * 3;
+      ctx.save();
+      ctx.shadowColor = def.color;
+      ctx.shadowBlur = 20;
+      ctx.font = `${this.cell * 0.8}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(def.icon, cx, cy);
+      ctx.restore();
+    },
+
+    drawSnake(ctx, p) {
+      const skin = SKINS[p.skin] || SKINS.green;
+      const rainbow = ['#FF6F61', '#FFD93D', '#6FE08A', '#7FB8F0', '#B983FF'];
+      p.body.forEach((seg, i) => {
+        const cx = seg.x * this.cell + this.cell / 2;
+        const cy = seg.y * this.cell + this.cell / 2;
+        const isHead = i === 0;
+        const radius = isHead ? this.cell * 0.46 : this.cell * 0.4 * (1 - i / (p.body.length * 2.2));
+        let bodyColor;
+        if (this.activeAbilities.rainbow2 && this.mode === 'team') bodyColor = rainbow[i % rainbow.length];
+        else if (p.glowFrames > 0) bodyColor = '#FFD700';
+        else bodyColor = isHead ? skin.headColor : skin.bodyColor;
+
+        ctx.save();
+        ctx.globalAlpha = p.alive ? 1 : 0.35;
+        if (p.glowFrames > 0) { ctx.shadowColor = '#FFD700'; ctx.shadowBlur = 18; }
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.arc(cx, cy, Math.max(radius, 4), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        if (isHead && p.alive) {
+          const pet = PETS[p.pet] || PETS.fox;
+          ctx.save();
+          ctx.font = `${this.cell * 0.5}px serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(pet.icon, cx, cy - this.cell * 0.55);
+          ctx.restore();
+        }
+      });
+    },
+
+    drawEmotes(ctx) {
+      ['p1', 'p2'].forEach((key) => {
+        const bubble = this.emoteBubbles[key];
+        const p = this.players[key];
+        if (!bubble || !p.body[0]) return;
+        const cx = p.body[0].x * this.cell + this.cell / 2;
+        const cy = p.body[0].y * this.cell + this.cell / 2 - this.cell * (1 + (1 - bubble.life));
+        ctx.save();
+        ctx.globalAlpha = clamp(bubble.life, 0, 1);
+        ctx.font = `${this.cell * 0.7}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(bubble.text, cx, cy);
+        ctx.restore();
+      });
+    }
+  };
+
+  /* ===========================================================
      7. INPUT HANDLING
      Keyboard (arrows + WASD), touch buttons, swipe gestures,
      and the secret "N-O-A-H" code detector.
@@ -1923,18 +2639,22 @@
       document.querySelectorAll('.touch-btn').forEach((btn) => {
         btn.addEventListener('touchstart', (e) => {
           e.preventDefault();
-          this.dirFromName(btn.dataset.dir);
+          this.dirFromName(btn.dataset.dir, btn.dataset.multiPlayer);
         }, { passive: false });
-        btn.addEventListener('click', () => this.dirFromName(btn.dataset.dir));
+        btn.addEventListener('click', () => this.dirFromName(btn.dataset.dir, btn.dataset.multiPlayer));
       });
       this.initSwipe();
     },
 
-    dirFromName(name) {
+    dirFromName(name, multiPlayer) {
       Audio.resume();
       const map = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
       const [x, y] = map[name];
-      if (Game.running && !Game.paused) Game.setDirection(x, y);
+      if (multiPlayer) {
+        if (MultiGame.running && !MultiGame.paused) MultiGame.setDirection(multiPlayer, x, y);
+      } else if (Game.running && !Game.paused) {
+        Game.setDirection(x, y);
+      }
     },
 
     onKey(e) {
@@ -1965,6 +2685,17 @@
       }
       if (key === 'Escape' && Game.running) {
         UI.togglePause();
+      }
+
+      // v2.1 §2 — Local multiplayer: Arrow Keys steer Player 1, WASD steers Player 2
+      if (MultiGame.running && !MultiGame.paused) {
+        const p1Map = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+        const p2Map = { w: [0, -1], W: [0, -1], s: [0, 1], S: [0, 1], a: [-1, 0], A: [-1, 0], d: [1, 0], D: [1, 0] };
+        if (p1Map[key]) { Audio.resume(); MultiGame.setDirection('p1', ...p1Map[key]); e.preventDefault(); }
+        else if (p2Map[key]) { Audio.resume(); MultiGame.setDirection('p2', ...p2Map[key]); e.preventDefault(); }
+      }
+      if (key === 'Escape' && MultiGame.running) {
+        UI.toggleMultiPause();
       }
     },
 
@@ -2014,13 +2745,24 @@
 
       $('btn-play').addEventListener('click', () => {
         Audio.init(); Audio.resume(); Audio.click();
-        Screens.show('levels');
+        Screens.show('mode-select');
       });
       $('btn-settings').addEventListener('click', () => { Audio.click(); Screens.show('settings'); });
       $('btn-credits').addEventListener('click', () => { Audio.click(); Screens.show('credits'); });
-      $('btn-levels-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
+      $('btn-levels-back').addEventListener('click', () => { Audio.click(); Screens.show('mode-select'); });
       $('btn-settings-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
       $('btn-credits-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
+
+      // v2.1 §1 — Game Mode Selector
+      $('mode-select-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
+      $('mode-card-solo').addEventListener('click', () => { Audio.click(); Screens.show('levels'); });
+      $('mode-card-vs').addEventListener('click', () => { Audio.click(); this.openPlayerSetup('vs'); });
+      $('mode-card-team').addEventListener('click', () => { Audio.click(); this.openPlayerSetup('team'); });
+
+      // v2.1 §7 — Player Customization / setup screen
+      $('player-setup-back').addEventListener('click', () => { Audio.click(); Screens.show('mode-select'); });
+      $('btn-start-multiplayer').addEventListener('click', () => { Audio.click(); this.startMultiplayer(); });
+      this.wirePlayerSetupControls();
 
       // V1.3 — Shop / Achievements / Stats menu buttons
       $('btn-shop').addEventListener('click', () => { Audio.click(); this.renderShop(); Screens.show('shop'); });
@@ -2087,6 +2829,10 @@
       $('btn-worldmap').addEventListener('click', () => { Audio.click(); this.renderWorldMap(); Screens.show('worldmap'); });
       $('btn-worldmap-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
 
+      // v2.0 §5 — Collection Book
+      $('btn-collection').addEventListener('click', () => { Audio.click(); this.renderCollectionBook(); Screens.show('collection'); });
+      $('btn-collection-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
+
       // v1.5 §7 — Photo Mode (available from the pause menu)
       $('btn-photo-mode').addEventListener('click', () => {
         Audio.click();
@@ -2121,6 +2867,35 @@
         this.startGame(Game.difficulty);
       });
       $('btn-gameover-menu').addEventListener('click', () => this.goToMenu());
+
+      // v2.1 — multiplayer pause / winner / team-victory overlays
+      $('btn-multi-pause').addEventListener('click', () => this.toggleMultiPause());
+      $('btn-multi-resume').addEventListener('click', () => { Audio.click(); this.toggleMultiPause(); });
+      $('btn-multi-restart').addEventListener('click', () => {
+        Audio.click();
+        Screens.overlay('multi-pause', false);
+        MultiGame.start(MultiGame.mode);
+      });
+      $('btn-multi-pause-menu').addEventListener('click', () => this.goToMenu());
+
+      $('btn-vs-play-again').addEventListener('click', () => {
+        Audio.click();
+        Screens.overlay('vs-winner', false);
+        MultiGame.start(MultiGame.mode);
+      });
+      $('btn-vs-menu').addEventListener('click', () => this.goToMenu());
+
+      $('btn-team-play-again').addEventListener('click', () => {
+        Audio.click();
+        Screens.overlay('team-victory', false);
+        MultiGame.start(MultiGame.mode);
+      });
+      $('btn-team-menu').addEventListener('click', () => this.goToMenu());
+
+      // v2.1 §6 — quick emote buttons (one small cluster per player)
+      document.querySelectorAll('.emote-btn[data-player]').forEach((btn) => {
+        btn.addEventListener('click', () => this.sendEmote(btn.dataset.player, btn.dataset.emote));
+      });
     },
 
     updateSoundIcon() {
@@ -2169,6 +2944,61 @@
       }
     },
 
+    // ---------- v2.1 §1/§7 — Game Mode Selector & Player Customization ----------
+    pendingMultiMode: 'vs',
+    openPlayerSetup(mode) {
+      this.pendingMultiMode = mode;
+      $('player-setup-title').textContent = mode === 'vs' ? '🔴 VS Battle Setup' : '🔵 Team Adventure Setup';
+      this.refreshPlayerSetupUI();
+      Screens.show('player-setup');
+    },
+    refreshPlayerSetupUI() {
+      ['p1', 'p2'].forEach((who) => {
+        const prof = Storage.data.players[who];
+        const nameEl = $(`${who}-name-input`);
+        if (nameEl) nameEl.value = prof.name;
+        const skinSel = $(`${who}-skin-select`);
+        if (skinSel) {
+          skinSel.innerHTML = Object.keys(SKINS)
+            .filter((id) => Storage.data.unlockedSkins.includes(id))
+            .map((id) => `<option value="${id}" ${prof.skin === id ? 'selected' : ''}>${SKINS[id].name}</option>`).join('');
+        }
+        const petSel = $(`${who}-pet-select`);
+        if (petSel) {
+          petSel.innerHTML = Object.keys(PETS)
+            .filter((id) => Storage.data.unlockedPets.includes(id))
+            .map((id) => `<option value="${id}" ${prof.pet === id ? 'selected' : ''}>${PETS[id].name}</option>`).join('');
+        }
+      });
+    },
+    wirePlayerSetupControls() {
+      ['p1', 'p2'].forEach((who) => {
+        const nameEl = $(`${who}-name-input`);
+        if (nameEl) nameEl.addEventListener('change', (e) => Storage.setPlayerProfile(who, 'name', e.target.value.slice(0, 12) || (who === 'p1' ? 'Noah' : 'Dad')));
+        const skinSel = $(`${who}-skin-select`);
+        if (skinSel) skinSel.addEventListener('change', (e) => Storage.setPlayerProfile(who, 'skin', e.target.value));
+        const petSel = $(`${who}-pet-select`);
+        if (petSel) petSel.addEventListener('change', (e) => Storage.setPlayerProfile(who, 'pet', e.target.value));
+      });
+    },
+
+    startMultiplayer() {
+      Screens.show('multiplayer');
+      MultiGame.start(this.pendingMultiMode);
+      if (Storage.data.musicOn) setTimeout(() => Audio.startMusic('game'), 1900);
+    },
+    toggleMultiPause() {
+      if (!MultiGame.running) return;
+      const willPause = !MultiGame.paused;
+      Screens.overlay('multi-pause', willPause);
+      if (willPause) MultiGame.pause(); else MultiGame.resume();
+    },
+    sendEmote(who, text) {
+      if (!MultiGame.running) return;
+      MultiGame.showEmote(who, text);
+      Audio.click();
+    },
+
     togglePause() {
       if (!Game.running) return;
       const willPause = !Game.paused;
@@ -2203,8 +3033,12 @@
     goToMenu() {
       Audio.click();
       Game.stop();
+      MultiGame.stop(); // v2.1
       Screens.overlay('pause', false);
       Screens.overlay('gameover', false);
+      Screens.overlay('multi-pause', false); // v2.1
+      Screens.overlay('vs-winner', false); // v2.1
+      Screens.overlay('team-victory', false); // v2.1
       Game.updateHud();
       this.refreshProfile(); // Magic Forest Update
       Screens.show('menu');
@@ -2340,6 +3174,15 @@
           return `<span class="collectible-chip${complete ? ' complete' : ''}">${def.icon} ${count}/${def.setSize}</span>`;
         }).join('');
       }
+
+      // v2.1 §9 — Family Statistics
+      const fs = Storage.data.familyStats;
+      setText('fs-games-together', fs.gamesPlayedTogether);
+      setText('fs-vs-wins', `${fs.vsWins.p1} - ${fs.vsWins.p2} (${fs.vsWins.ties} ties)`);
+      setText('fs-team-wins', fs.teamWins);
+      setText('fs-longest-survival', `${fs.longestTeamSurvivalSec}s`);
+      setText('fs-fruits-together', fs.totalFruitsTogether);
+      setText('fs-coins-together', fs.totalCoinsTogether);
     },
 
     // ---------- v1.4 §1 — Mission Center ----------
@@ -2422,6 +3265,71 @@
         `;
         list.appendChild(item);
       });
+    },
+
+    // ---------- v2.0 §5 — COLLECTION BOOK ----------
+    renderCollectionBook() {
+      const list = $('collection-list');
+      if (!list) return;
+      list.innerHTML = '';
+
+      const sections = [
+        {
+          title: '🍎 Fruits Discovered',
+          items: FOODS.map((f) => ({
+            icon: f.emoji, name: f.name, done: !!(Storage.data.stats.fruitCounts[f.name])
+          }))
+        },
+        {
+          title: '🐾 Pets Adopted',
+          items: Object.keys(PETS).map((id) => ({
+            icon: PETS[id].icon, name: PETS[id].name, done: Storage.data.unlockedPets.includes(id)
+          }))
+        },
+        {
+          title: '✨ Collectible Sets',
+          items: COLLECTIBLE_KEYS.map((k) => ({
+            icon: COLLECTIBLES[k].icon, name: COLLECTIBLES[k].name, done: Storage.data.collectibleSetsCompleted.includes(k)
+          }))
+        },
+        {
+          title: '🌍 Worlds & Stages',
+          items: STAGES.map((s) => ({
+            icon: s.icon, name: s.name, done: Storage.data.stats.highestLevel > s.levelRequired
+          }))
+        },
+        {
+          title: '🛍️ Snake Skins',
+          items: Object.keys(SKINS).map((id) => ({
+            icon: '🐍', name: SKINS[id].name, done: Storage.data.unlockedSkins.includes(id)
+          }))
+        }
+      ];
+
+      let totalItems = 0, totalDone = 0;
+      sections.forEach((section) => {
+        const header = document.createElement('h3');
+        header.className = 'collection-section-title';
+        header.textContent = section.title;
+        list.appendChild(header);
+
+        const grid = document.createElement('div');
+        grid.className = 'collection-grid';
+        section.items.forEach((item) => {
+          totalItems++;
+          if (item.done) totalDone++;
+          const cell = document.createElement('div');
+          cell.className = 'collection-cell' + (item.done ? ' unlocked' : '');
+          cell.title = item.name;
+          cell.innerHTML = `<span class="collection-icon">${item.done ? item.icon : '❔'}</span><span class="collection-name">${item.done ? item.name : '???'}</span>`;
+          grid.appendChild(cell);
+        });
+        list.appendChild(grid);
+      });
+
+      const pct = totalItems > 0 ? Math.round((totalDone / totalItems) * 100) : 0;
+      const pctEl = $('collection-percent');
+      if (pctEl) pctEl.textContent = `${pct}% Complete (${totalDone}/${totalItems})`;
     }
   };
 
@@ -2431,12 +3339,32 @@
   window.addEventListener('DOMContentLoaded', () => {
     FX.init();
     Game.init();
+    MultiGame.init(); // v2.1
     Input.init();
     UI.init();
     Screens.show('menu');
     DailyReward.checkAndGrant(); // V1.3 §4
     Quests.checkReset(); // v1.5 §2
     UI.refreshProfile(); // Magic Forest Update — pick up any coins/streak just granted
+
+    // v2.0 §1 — Cinematic Intro (first launch only)
+    if (!Storage.data.cinematicSeen) {
+      const intro = $('cinematic-intro');
+      if (intro) {
+        intro.classList.add('show');
+        const dismissIntro = () => {
+          intro.classList.remove('show');
+          intro.classList.add('hide');
+          Storage.set('cinematicSeen', true);
+          Audio.init(); Audio.resume(); Audio.click();
+          if (Storage.data.musicOn) Audio.startMusic('menu');
+        };
+        intro.addEventListener('click', dismissIntro, { once: true });
+        setTimeout(() => { // auto-dismiss if the child doesn't tap
+          if (intro.classList.contains('show')) dismissIntro();
+        }, 6000);
+      }
+    }
 
     // Start ambient menu music on first user interaction
     // (browsers block audio until a gesture happens).

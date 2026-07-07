@@ -679,6 +679,16 @@ button {
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* v2.0 §7 — Smart Camera: gentle celebration zoom pulse */
+.canvas-wrap.celebrate-zoom #game-canvas {
+  animation: celebrate-zoom-pulse 0.7s ease-out;
+}
+@keyframes celebrate-zoom-pulse {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.035); }
+  100% { transform: scale(1); }
+}
+
 #game-canvas {
   border-radius: var(--radius-md);
   box-shadow: 0 14px 34px rgba(0,0,0,0.3);
@@ -1188,6 +1198,200 @@ body.high-contrast .overlay-card {
   0% { opacity: 0; }
   30% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* =========================================================
+   V2.0 §1 — CINEMATIC INTRO
+   ========================================================= */
+.cinematic-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: linear-gradient(180deg, #1B3A2F, #0E2019);
+  color: #fff;
+  text-align: center;
+  cursor: pointer;
+  overflow: hidden;
+}
+.cinematic-intro.show { display: flex; animation: cinematic-fade-in 1s ease; }
+.cinematic-intro.hide { animation: cinematic-fade-out 0.6s ease forwards; }
+@keyframes cinematic-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cinematic-fade-out { from { opacity: 1; } to { opacity: 0; display: none; } }
+
+.cinematic-sky {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 30%, rgba(111,224,138,0.25) 0%, rgba(0,0,0,0) 60%);
+  animation: cinematic-glow 4s ease-in-out infinite;
+}
+@keyframes cinematic-glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.cinematic-logo {
+  font-size: 90px;
+  animation: cinematic-logo-in 1.4s cubic-bezier(.34,1.56,.64,1);
+  filter: drop-shadow(0 0 24px rgba(111,224,138,0.6));
+}
+@keyframes cinematic-logo-in {
+  0% { transform: scale(0.3) translateY(40px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.cinematic-title {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 6vw, 36px);
+  letter-spacing: 2px;
+  animation: cinematic-title-in 1.2s ease 0.4s both;
+}
+@keyframes cinematic-title-in {
+  0% { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.cinematic-tap {
+  font-size: 15px;
+  opacity: 0.85;
+  animation: cinematic-tap-pulse 1.6s ease-in-out infinite;
+}
+@keyframes cinematic-tap-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* =========================================================
+   V2.0 §5 — COLLECTION BOOK
+   ========================================================= */
+.collection-percent {
+  font-weight: 800;
+  color: var(--gold);
+  background: linear-gradient(135deg, #FFF6D6, #FFE9A8);
+  border-radius: 999px;
+  padding: 6px 16px;
+  display: inline-block;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.collection-book {
+  max-height: 55vh;
+  overflow-y: auto;
+  text-align: left;
+}
+.collection-section-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--ink);
+  margin: 10px 0 6px;
+}
+.collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.collection-cell {
+  background: #F1F6FF;
+  border-radius: var(--radius-md);
+  padding: 8px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  opacity: 0.5;
+}
+.collection-cell.unlocked {
+  opacity: 1;
+  background: linear-gradient(135deg, #FFF6D6, #FFE9A8);
+  border: 1px solid var(--gold);
+}
+.collection-icon { font-size: 20px; }
+.collection-name { font-size: 9px; font-weight: 700; color: var(--ink); text-align: center; }
+
+/* =========================================================
+   V2.1 — FAMILY EDITION (Local Multiplayer)
+   ========================================================= */
+
+/* §1 Mode selector cards borrow .level-card, just tint the border */
+.mode-card-vs { border-color: #FF8A80; }
+.mode-card-team { border-color: #7FB8F0; }
+
+/* §7 Player setup */
+.player-setup-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.player-setup-col {
+  background: #F1F6FF;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.player-setup-heading { font-size: 13px; color: var(--ink); margin-bottom: 4px; }
+.player-name-input, .player-select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #DCE8FA;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+/* Multiplayer HUD */
+.multi-hud-group { display: flex; gap: 10px; }
+.multi-hud-group.hidden { display: none; }
+.hud-pill-p1 { border: 2px solid #4CAF50; }
+.hud-pill-p2 { border: 2px solid #2E6FD9; }
+
+/* §6 Quick emote clusters */
+.emote-row {
+  position: absolute;
+  display: flex;
+  gap: 6px;
+  z-index: 6;
+}
+.emote-row-p1 { left: 3%; bottom: 26%; }
+.emote-row-p2 { right: 3%; bottom: 26%; }
+.emote-btn {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.85);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.emote-btn:active { transform: scale(0.88); }
+
+/* §2 Split-screen touch controls */
+.split-touch-controls {
+  position: absolute;
+  bottom: 2%;
+  left: 0; right: 0;
+  display: none;
+  justify-content: space-between;
+  padding: 0 3%;
+  z-index: 6;
+  pointer-events: none;
+}
+.split-touch-controls .touch-controls {
+  position: static;
+  display: flex;
+  transform: scale(0.8);
+  pointer-events: auto;
+}
+@media (hover: none) and (pointer: coarse) {
+  .split-touch-controls { display: flex; }
 }
 
 /* =========================================================
