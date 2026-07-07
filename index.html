@@ -37,6 +37,13 @@
       <div class="flowers"></div>
       <!-- V1.2: a few extra small flowers dotted along the grass -->
       <div class="mini-flowers"></div>
+      <!-- Magic Forest Update — sun rays, fireflies, and drifting leaves -->
+      <div class="sun-rays"></div>
+      <div class="firefly firefly-1"></div>
+      <div class="firefly firefly-2"></div>
+      <div class="firefly firefly-3"></div>
+      <div class="leaf leaf-1">🍃</div>
+      <div class="leaf leaf-2">🍃</div>
     </div>
 
     <!-- ============ MAIN MENU SCREEN ============ -->
@@ -51,6 +58,18 @@
         </h1>
         <p class="subtitle">Made with ❤️ by Dad Raef</p>
 
+        <!-- Magic Forest Update — Player Profile -->
+        <div class="profile-card" id="profile-card">
+          <div class="profile-avatar">🐍</div>
+          <div class="profile-welcome">Welcome Back Noah!</div>
+          <div class="profile-stats">
+            <span class="profile-stat">⭐ Lv.<strong id="profile-level">1</strong></span>
+            <span class="profile-stat">🏆 <strong id="profile-best">0</strong></span>
+            <span class="profile-stat">🪙 <strong id="profile-coins">0</strong></span>
+            <span class="profile-stat">📅 <strong id="profile-streak">0</strong>-day streak</span>
+          </div>
+        </div>
+
         <div class="high-score-pill">
           <span class="hs-icon">🏆</span>
           <span>Best Score: <strong id="menu-high-score">0</strong></span>
@@ -58,22 +77,22 @@
 
         <nav class="menu-buttons">
           <button id="btn-play" class="btn btn-primary btn-lg">
-            <span class="btn-icon">▶️</span> Play
+            <span class="btn-icon">▶️</span> Play Adventure
           </button>
           <button id="btn-shop" class="btn btn-secondary">
-            <span class="btn-icon">🛍️</span> Shop
+            <span class="btn-icon">🛍️</span> Snake Shop
           </button>
           <button id="btn-achievements" class="btn btn-secondary">
             <span class="btn-icon">🏆</span> Achievements
           </button>
           <button id="btn-stats" class="btn btn-secondary">
-            <span class="btn-icon">📊</span> Statistics
+            <span class="btn-icon">📊</span> My Progress
           </button>
           <button id="btn-settings" class="btn btn-secondary">
             <span class="btn-icon">⚙️</span> Settings
           </button>
           <button id="btn-credits" class="btn btn-secondary">
-            <span class="btn-icon">✨</span> Credits
+            <span class="btn-icon">❤️</span> About Dad
           </button>
         </nav>
 
@@ -200,7 +219,7 @@
         <button id="btn-pause" class="hud-btn" aria-label="Pause">⏸️</button>
       </div>
 
-      <div class="canvas-wrap">
+      <div class="canvas-wrap" id="game-canvas-wrap">
         <canvas id="game-canvas"></canvas>
         <div id="countdown-overlay" class="countdown-overlay">
           <span id="countdown-number">3</span>
@@ -236,15 +255,30 @@
     <!-- ============ GAME OVER OVERLAY ============ -->
     <div id="overlay-gameover" class="overlay">
       <div class="overlay-card">
-        <h2 class="panel-title gameover-title">Great Job Noah! 🎉</h2>
+        <h2 class="panel-title gameover-title">Amazing Job Noah! 🎉</h2>
         <div class="gameover-scores">
           <div class="score-box">
-            <span class="score-label">Score</span>
+            <span class="score-label">⭐ Score</span>
             <span id="final-score" class="score-value">0</span>
           </div>
           <div class="score-box">
-            <span class="score-label">Best</span>
+            <span class="score-label">🏆 Best</span>
             <span id="final-best" class="score-value">0</span>
+          </div>
+        </div>
+        <!-- Magic Forest Update — extra round summary -->
+        <div class="gameover-scores">
+          <div class="score-box">
+            <span class="score-label">🪙 Coins</span>
+            <span id="final-coins" class="score-value">0</span>
+          </div>
+          <div class="score-box">
+            <span class="score-label">🍎 Fruits</span>
+            <span id="final-fruits" class="score-value">0</span>
+          </div>
+          <div class="score-box">
+            <span class="score-label">🎖️ New</span>
+            <span id="final-achievements" class="score-value">0</span>
           </div>
         </div>
         <p id="new-record-msg" class="new-record">🌟 New Record! 🌟</p>
@@ -258,6 +292,7 @@
       <div class="overlay-card">
         <h2 class="panel-title">🎁 Daily Reward!</h2>
         <p class="daily-reward-amount" id="daily-reward-amount">+20 Coins</p>
+        <p class="daily-reward-streak" id="daily-reward-streak">🔥 1-day streak!</p>
         <button id="btn-daily-reward-close" class="btn btn-primary">Yay! 🎉</button>
       </div>
     </div>

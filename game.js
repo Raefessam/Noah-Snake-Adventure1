@@ -45,6 +45,7 @@
       unlockedSkins: ['green'],
       currentSkin: 'green',
       lastDailyReward: 0,
+      streak: 0, // Magic Forest Update — consecutive daily-reward days
       stats: {
         gamesPlayed: 0,
         totalFruits: 0,
@@ -444,10 +445,15 @@
       const now = Date.now();
       const last = Storage.data.lastDailyReward || 0;
       if (now - last < DAILY_REWARD_MS) return;
+      // Streak continues if claimed within a 48h grace window, otherwise resets.
+      Storage.data.streak = (last > 0 && now - last <= DAILY_REWARD_MS * 2) ? (Storage.data.streak || 0) + 1 : 1;
       Storage.data.lastDailyReward = now;
       Storage.addCoins(DAILY_REWARD_COINS);
+      Storage.save();
       const amountEl = $('daily-reward-amount');
       if (amountEl) amountEl.textContent = `+${DAILY_REWARD_COINS} Coins`;
+      const streakEl = $('daily-reward-streak');
+      if (streakEl) streakEl.textContent = `🔥 ${Storage.data.streak}-day streak!`;
       Screens.overlay('daily-reward', true);
       Audio.levelUp();
       FX.confetti(80, ['#FFD700', '#FFF6C9', '#FFC300', '#FFFFFF']);
@@ -465,7 +471,15 @@
     blue:   { name: 'Blue Snake',    cost: 20,  bodyColor: '#7FB8F0', headColor: '#2E6FD9', rainbow: false },
     rainbow:{ name: 'Rainbow Snake', cost: 50,  bodyColor: '#B983FF', headColor: '#B983FF', rainbow: true  },
     golden: { name: 'Golden Snake',  cost: 100, bodyColor: '#FFE066', headColor: '#FFD700', rainbow: false },
-    pink:   { name: 'Cute Pink Snake', cost: 150, bodyColor: '#FFAFCC', headColor: '#FF6F91', rainbow: false }
+    pink:   { name: 'Cute Pink Snake', cost: 150, bodyColor: '#FFAFCC', headColor: '#FF6F91', rainbow: false },
+    // Magic Forest Update — themed character skins. Each adds a small emoji
+    // "topper" above the head so it reads as a distinct character without
+    // needing a whole new sprite-drawing system.
+    fox:      { name: 'Fox Snake',      cost: 80,  bodyColor: '#FF9E4F', headColor: '#F97C1D', rainbow: false, topper: '🦊' },
+    panda:    { name: 'Panda Snake',    cost: 120, bodyColor: '#F5F5F5', headColor: '#2E2E2E', rainbow: false, topper: '🐼' },
+    dragon:   { name: 'Dragon Snake',   cost: 250, bodyColor: '#5FCB6C', headColor: '#2E7D32', rainbow: false, topper: '🐉' },
+    dinosaur: { name: 'Dinosaur Snake', cost: 300, bodyColor: '#8BC34A', headColor: '#558B2F', rainbow: false, topper: '🦖' },
+    unicorn:  { name: 'Unicorn Snake',  cost: 400, bodyColor: '#FFD1F5', headColor: '#E893F5', rainbow: false, topper: '🦄' }
   };
 
   /* ===========================================================
@@ -487,7 +501,16 @@
     { id: 'games_10', icon: '🎮', title: 'Dedicated Player', desc: 'Play 10 games',
       done: (d) => d.stats.gamesPlayed >= 10 },
     { id: 'rainbow_unlocked', icon: '🐍', title: 'Unlock Rainbow Snake', desc: 'Unlock the Rainbow Snake skin',
-      done: (d) => d.unlockedSkins.includes('rainbow') }
+      done: (d) => d.unlockedSkins.includes('rainbow') },
+    // Magic Forest Update — new achievements
+    { id: 'first_coin', icon: '🪙', title: 'First Coin', desc: 'Collect your very first coin',
+      done: (d) => d.stats.totalCoinsEarned >= 1 },
+    { id: 'first_skin', icon: '🛍️', title: 'First Skin', desc: 'Unlock any snake skin from the shop',
+      done: (d) => d.unlockedSkins.length > 1 },
+    { id: 'fruits_500', icon: '🍑', title: 'Fruit Legend', desc: 'Collect 500 fruits total',
+      done: (d) => d.stats.totalFruits >= 500 },
+    { id: 'games_50', icon: '🏅', title: 'Snake Champion', desc: 'Play 50 games',
+      done: (d) => d.stats.gamesPlayed >= 50 }
   ];
 
   /* ===========================================================
@@ -501,7 +524,13 @@
     { name: 'strawberry', emoji: '🍓', color: '#FF4D6D', points: 200, pitch: 700 },
     { name: 'grapes',     emoji: '🍇', color: '#B983FF', points: 250, pitch: 740 },
     { name: 'watermelon', emoji: '🍉', color: '#FF6F91', points: 300, pitch: 620 },
-    { name: 'pineapple',  emoji: '🍍', color: '#FFC93C', points: 500, pitch: 820 }
+    { name: 'pineapple',  emoji: '🍍', color: '#FFC93C', points: 500, pitch: 820 },
+    // Magic Forest Update — 5 new fruits, none of the originals removed
+    { name: 'orange',     emoji: '🍊', color: '#FFA23E', points: 200, pitch: 680 },
+    { name: 'kiwi',       emoji: '🥝', color: '#8BC34A', points: 350, pitch: 760 },
+    { name: 'cherry',     emoji: '🍒', color: '#E0344C', points: 120, pitch: 640 },
+    { name: 'blueberry',  emoji: '🫐', color: '#5B7FDB', points: 280, pitch: 700 },
+    { name: 'peach',      emoji: '🍑', color: '#FFB199', points: 220, pitch: 660 }
   ];
 
   // Step timing (ms between grid moves) — higher = slower snake.
@@ -535,6 +564,8 @@
     level: 1, // V1.3 §1
     coin: null, // V1.3 §2 — current coin on the board, or null
     sessionSeconds: 0, // V1.3 §6 — playtime accumulated this game, flushed on stop
+    coinsThisGame: 0, // Magic Forest Update — for the improved Game Over screen
+    achievementsAtStart: 0, // snapshot to detect newly-unlocked achievements
 
     init() {
       this.canvas = $('game-canvas');
@@ -569,6 +600,8 @@
       this.level = 1;
       this.coin = null;
       this.sessionSeconds = 0;
+      this.coinsThisGame = 0;
+      this.achievementsAtStart = ACHIEVEMENTS.filter((a) => a.done(Storage.data)).length;
       this.secretMode = false;
       this.secretBuffer = '';
       $('secret-banner').classList.remove('show');
@@ -585,7 +618,13 @@
     runCountdown() {
       const overlay = $('countdown-overlay');
       const numEl = $('countdown-number');
+      const wrap = $('game-canvas-wrap');
       overlay.classList.add('active');
+      // Magic Forest Update — brief camera zoom-in as the map appears
+      if (wrap) {
+        wrap.classList.add('map-zoom-in');
+        setTimeout(() => wrap.classList.remove('map-zoom-in'), 900);
+      }
       let n = 3;
       numEl.textContent = n;
       Audio.click();
@@ -737,6 +776,7 @@
     collectCoin() {
       this.coin = null;
       Storage.addCoins(1);
+      this.coinsThisGame++;
       Audio.coin();
       this.updateHud();
       const rect = this.canvas.getBoundingClientRect();
@@ -889,7 +929,18 @@
         ctx.fill();
         ctx.restore();
 
-        if (isHead) this.drawFace(ctx, cx, cy);
+        if (isHead) {
+          this.drawFace(ctx, cx, cy);
+          // Magic Forest Update — themed skin topper (fox/panda/dragon/dino/unicorn)
+          if (skin.topper && !this.secretMode) {
+            ctx.save();
+            ctx.font = `${this.cell * 0.55}px serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(skin.topper, cx, cy - this.cell * 0.55);
+            ctx.restore();
+          }
+        }
       });
 
       if (this.glowFrames > 0) this.glowFrames--;
@@ -1057,6 +1108,7 @@
       $('toggle-motion').checked = Storage.data.reducedMotion;
       document.body.classList.toggle('reduced-motion', Storage.data.reducedMotion);
       this.updateSoundIcon();
+      this.refreshProfile(); // Magic Forest Update
 
       $('btn-play').addEventListener('click', () => {
         Audio.init(); Audio.resume(); Audio.click();
@@ -1137,6 +1189,16 @@
       $('sound-icon').textContent = on ? '🔊' : '🔇';
     },
 
+    // Magic Forest Update — Player Profile card (uses lifetime stats, since
+    // "current level" outside an active game means the highest level reached).
+    refreshProfile() {
+      const setText = (id, val) => { const el = $(id); if (el) el.textContent = val; };
+      setText('profile-level', Storage.data.stats.highestLevel);
+      setText('profile-best', Storage.data.highScore);
+      setText('profile-coins', Storage.data.coins);
+      setText('profile-streak', Storage.data.streak || 0);
+    },
+
     startGame(level) {
       Screens.show('game');
       Game.start(level);
@@ -1159,6 +1221,15 @@
       const isRecord = Game.score > 0 && Game.score >= Storage.data.highScore;
       $('new-record-msg').classList.toggle('show', isRecord);
       if (isRecord) { FX.confetti(140); Audio.victory(); }
+
+      // Magic Forest Update — richer Game Over summary
+      const setText = (id, val) => { const el = $(id); if (el) el.textContent = val; };
+      setText('final-coins', Game.coinsThisGame);
+      setText('final-fruits', Game.foodsEaten);
+      const achievementsNow = ACHIEVEMENTS.filter((a) => a.done(Storage.data)).length;
+      const newlyUnlocked = Math.max(0, achievementsNow - Game.achievementsAtStart);
+      setText('final-achievements', newlyUnlocked);
+
       Screens.overlay('gameover', true);
     },
 
@@ -1168,6 +1239,7 @@
       Screens.overlay('pause', false);
       Screens.overlay('gameover', false);
       Game.updateHud();
+      this.refreshProfile(); // Magic Forest Update
       Screens.show('menu');
       Audio.startMusic('menu');
     },
@@ -1264,6 +1336,7 @@
     UI.init();
     Screens.show('menu');
     DailyReward.checkAndGrant(); // V1.3 §4
+    UI.refreshProfile(); // Magic Forest Update — pick up any coins/streak just granted
 
     // Start ambient menu music on first user interaction
     // (browsers block audio until a gesture happens).
