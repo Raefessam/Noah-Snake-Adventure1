@@ -279,8 +279,8 @@
     recordTeamSurvival(seconds) {
       if (seconds > this.data.familyStats.longestTeamSurvivalSec) {
         this.data.familyStats.longestTeamSurvivalSec = seconds;
+        this.save(); // only write when the record actually improves
       }
-      this.save();
     },
     addFamilyFruits(n) {
       this.data.familyStats.totalFruitsTogether += n;
@@ -944,11 +944,7 @@
     { id: 'coop_fruits50', icon: '🍎', title: 'Collect 50 Fruits Together', target: 50,
       progress: (s) => s.fruits, reward: { coins: 40, xp: 60 } },
     { id: 'coop_score10000', icon: '⭐', title: 'Reach 10000 Score', target: 10000,
-      progress: (s) => s.score, reward: { coins: 80, xp: 120 } },
-    { id: 'coop_boss', icon: '🐉', title: 'Defeat a Boss Together', target: 1,
-      progress: (s) => s.bossesDefeated, reward: { coins: 100, xp: 150 } },
-    { id: 'coop_coins100', icon: '🪙', title: 'Collect 100 Coins', target: 100,
-      progress: (s) => s.coins, reward: { coins: 50, xp: 60 } }
+      progress: (s) => s.score, reward: { coins: 80, xp: 120 } }
   ];
 
   // §5 — Team Abilities. Each is picked up like a power-up but benefits BOTH
@@ -1177,6 +1173,7 @@
       while (this.acc >= effectiveStepMs) {
         this.tick();
         this.acc -= effectiveStepMs;
+        if (!this.running) break; // BUG FIX — tick() may have ended the game; stop this batch immediately
       }
       this.render();
     },
@@ -2203,7 +2200,8 @@
       this.emoteBubbles = {};
       this.placeFood();
       this.updateHud();
-      $('multi-team-banner') && $('multi-team-banner').classList.remove('show');
+      const teamBanner = $('multi-team-banner');
+      if (teamBanner) teamBanner.classList.remove('show');
       Storage.recordFamilyGame(); // v2.1 §9
       this.paused = false;
       this.running = false;
@@ -2308,6 +2306,7 @@
       while (this.acc >= this.stepMs) {
         this.tick();
         this.acc -= this.stepMs;
+        if (!this.running) break; // BUG FIX — tick() may have ended the match; stop this batch immediately
       }
       this.render();
     },
