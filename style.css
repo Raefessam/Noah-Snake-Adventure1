@@ -11,6 +11,15 @@
    ========================================================= */
 
 :root {
+  /* ============================================================
+     NOAH DESIGN SYSTEM v1.0
+     Inspired by (never copied from): Apple Arcade, Nintendo,
+     Super Mario Wonder, Pokémon Quest, Toca Boca, Disney Dreamlight
+     Valley, Animal Crossing, Monument Valley, Alto's Adventure,
+     Crossy Road. Warm, rounded, high-contrast, child-safe.
+     ============================================================ */
+
+  /* ---- Legacy scene tokens (kept — used throughout existing background/scene CSS) ---- */
   --sky-top: #8ED1FC;
   --sky-bottom: #2E86DE;
   --grass-top: #9BE86B;
@@ -29,6 +38,78 @@
   --shadow-soft: 0 12px 30px rgba(35, 64, 90, 0.25);
   --font-display: 'Arial Rounded MT Bold', 'Segoe UI Rounded', 'SF Rounded', -apple-system, BlinkMacSystemFont, 'Trebuchet MS', sans-serif;
   --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Trebuchet MS', sans-serif;
+
+  /* ---- §1 Color tokens (every color has one job) ---- */
+  --color-primary: #3EA55D;        /* main brand green — primary actions */
+  --color-primary-light: #6FE08A;
+  --color-secondary: #2E6FD9;      /* blue — secondary actions */
+  --color-secondary-light: #7FB8F0;
+  --color-accent: #B983FF;         /* lavender — highlights, rare/epic */
+  --color-success: #3EA55D;
+  --color-warning: #FFC93C;
+  --color-danger: #E85A4F;
+  --color-bg: #EAF6E8;             /* page background */
+  --color-card: rgba(255,255,255,0.92);
+  --color-text: #23405A;
+  --color-text-muted: #6E8399;
+  --color-disabled: #B7C3CE;
+  --color-border: #DCE8FA;
+  --color-shadow: rgba(35,64,90,0.25);
+  --color-glass: rgba(255,255,255,0.55);
+
+  /* ---- Dark mode support (opt-in via body.dark-mode; not enabled by default) ---- */
+  --dm-bg: #16241E;
+  --dm-card: rgba(30,45,38,0.92);
+  --dm-text: #EAF6E8;
+  --dm-text-muted: #9FB3A8;
+  --dm-border: rgba(255,255,255,0.12);
+
+  /* ---- §2 Typography scale (responsive via clamp) ---- */
+  --text-display: clamp(28px, 7vw, 44px);
+  --text-h1: clamp(22px, 5.5vw, 30px);
+  --text-h2: clamp(18px, 4.5vw, 24px);
+  --text-h3: clamp(15px, 3.6vw, 18px);
+  --text-body: clamp(14px, 3.2vw, 16px);
+  --text-caption: clamp(11px, 2.6vw, 12px);
+  --text-button: clamp(14px, 3.4vw, 16px);
+  --text-badge: clamp(9px, 2.2vw, 11px);
+  --text-number: clamp(20px, 5vw, 28px);
+
+  /* ---- §3 Spacing scale ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ---- §4 Border radius scale (aliased to the exact legacy values — zero visual drift) ---- */
+  --radius-small: var(--radius-sm);   /* 10px */
+  --radius-medium: var(--radius-md);  /* 18px */
+  --radius-large: var(--radius-lg);   /* 28px */
+  --radius-card: var(--radius-md);    /* 18px — cards use the same rounding as medium */
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+
+  /* ---- §5 Shadow scale (soft-sm/medium/floating reuse the exact shadows already in use
+     across the game; popup/hero are genuinely new, larger tiers for bigger moments) ---- */
+  --shadow-soft-sm: 0 4px 10px rgba(0,0,0,0.15);
+  --shadow-medium: 0 6px 16px rgba(0,0,0,0.15);
+  --shadow-floating: var(--shadow-soft); /* 0 12px 30px rgba(35,64,90,0.25) */
+  --shadow-popup: 0 20px 48px rgba(35,64,90,0.35);
+  --shadow-hero: 0 24px 60px rgba(35,64,90,0.4);
+
+  /* ---- §13 Animation timing ---- */
+  --ease-fast: 0.15s;
+  --ease-medium: 0.3s;
+  --ease-slow: 0.6s;
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+  --ease-bounce: cubic-bezier(.68,-0.55,.27,1.55);
+  --ease-standard: ease;
 }
 
 * { box-sizing: border-box; }
@@ -58,6 +139,130 @@ button {
   height: 100%;
   overflow: hidden;
 }
+
+/* =========================================================
+   NOAH DESIGN SYSTEM v1.0 — REUSABLE COMPONENTS
+   Additive component library. Existing screens are not
+   required to change; new/updated screens should prefer these.
+   ========================================================= */
+
+/* ---- §2 Typography utility classes ---- */
+.ds-text-display { font-family: var(--font-display); font-size: var(--text-display); font-weight: 900; color: var(--color-text); }
+.ds-text-h1 { font-family: var(--font-display); font-size: var(--text-h1); font-weight: 800; color: var(--color-text); }
+.ds-text-h2 { font-family: var(--font-display); font-size: var(--text-h2); font-weight: 800; color: var(--color-text); }
+.ds-text-h3 { font-family: var(--font-display); font-size: var(--text-h3); font-weight: 700; color: var(--color-text); }
+.ds-text-body { font-family: var(--font-body); font-size: var(--text-body); color: var(--color-text); }
+.ds-text-caption { font-family: var(--font-body); font-size: var(--text-caption); color: var(--color-text-muted); }
+.ds-text-number { font-family: var(--font-display); font-size: var(--text-number); font-weight: 900; color: var(--color-text); font-variant-numeric: tabular-nums; }
+
+/* ---- §10 Badges: NEW / HOT / RARE / EPIC / LEGENDARY / LOCKED / COMPLETED ---- */
+.ds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: var(--text-badge);
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  color: var(--white);
+  line-height: 1.6;
+}
+.ds-badge-new { background: linear-gradient(135deg, var(--color-secondary-light), var(--color-secondary)); }
+.ds-badge-hot { background: linear-gradient(135deg, #FF9E4F, var(--color-danger)); }
+.ds-badge-rare { background: linear-gradient(135deg, var(--color-secondary-light), #4C8FE0); }
+.ds-badge-epic { background: linear-gradient(135deg, #D7B3FF, var(--color-accent)); }
+.ds-badge-legendary { background: linear-gradient(135deg, #FFE9A8, var(--gold)); color: var(--ink); animation: ds-badge-shine 2s ease-in-out infinite; }
+@keyframes ds-badge-shine { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.25); } }
+.ds-badge-locked { background: var(--color-disabled); color: var(--color-text); }
+.ds-badge-completed { background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary)); }
+
+/* ---- §9 Progress components (one reusable bar for XP / health / mission / collection / level) ---- */
+.ds-progress {
+  width: 100%;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(35,64,90,0.12);
+  overflow: hidden;
+}
+.ds-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--color-primary-light), var(--color-primary));
+  transition: width var(--ease-medium) var(--ease-standard);
+}
+.ds-progress-xp .ds-progress-fill { background: linear-gradient(90deg, #7FE0D9, #3EBFB0); }
+.ds-progress-health .ds-progress-fill { background: linear-gradient(90deg, #FF9E9E, var(--color-danger)); }
+.ds-progress-level .ds-progress-fill { background: linear-gradient(90deg, #FFE9A8, var(--gold)); }
+.ds-progress-loading {
+  background: linear-gradient(90deg, var(--color-border) 25%, #EEF4FF 50%, var(--color-border) 75%);
+  background-size: 200% 100%;
+  animation: ds-loading-shimmer 1.2s linear infinite;
+}
+@keyframes ds-loading-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ---- §6 Icon button & back button ---- */
+.ds-icon-btn {
+  width: 44px; height: 44px;
+  border-radius: var(--radius-circle);
+  background: var(--color-glass);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  box-shadow: var(--shadow-soft-sm);
+  transition: transform var(--ease-fast) var(--ease-standard);
+}
+.ds-icon-btn:active { transform: scale(0.9); }
+.ds-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--text-button);
+  color: var(--color-text);
+  background: none;
+  padding: var(--space-2) var(--space-3);
+}
+.ds-back-btn:active { transform: translateX(-2px); }
+
+/* ---- §6 Button state variants (additive — existing .btn classes are untouched) ---- */
+.btn[disabled], .btn.ds-disabled {
+  opacity: 0.5;
+  filter: grayscale(0.4);
+  pointer-events: none;
+  box-shadow: none;
+}
+.btn.ds-locked {
+  background: var(--color-disabled) !important;
+  color: var(--color-text-muted);
+}
+.btn:focus-visible {
+  outline: 3px solid var(--color-secondary-light);
+  outline-offset: 2px;
+}
+.btn.ds-loading {
+  color: transparent;
+  pointer-events: none;
+}
+.btn.ds-loading::before {
+  content: '';
+  position: absolute;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.5);
+  border-top-color: #fff;
+  animation: ds-spin 0.7s linear infinite;
+}
+@keyframes ds-spin { to { transform: rotate(360deg); } }
+.btn.ds-success { background: linear-gradient(180deg, var(--color-primary-light), var(--color-primary)) !important; }
 
 /* =========================================================
    BACKGROUND SCENE
@@ -1064,7 +1269,6 @@ body.reduced-motion .canvas-wrap { animation: none; } /* respect existing reduce
 .achievement-text { display: flex; flex-direction: column; flex: 1; }
 .achievement-text strong { color: var(--ink); font-size: 14px; }
 .achievement-text small { color: #6E8399; font-size: 11px; }
-.achievement-state { font-size: 18px; }
 
 /* =========================================================
    V1.4 §1 — MISSION CENTER

@@ -2449,8 +2449,11 @@
         const preview = skin.rainbow
           ? 'linear-gradient(90deg, #FF6F61, #FFD93D, #6FE08A, #7FB8F0, #B983FF)'
           : `linear-gradient(160deg, ${skin.headColor}, ${skin.bodyColor})`;
+        const rarityBadgeClass = rarity === 'common' ? '' : `ds-badge ds-badge-${rarity}`;
+        const rarityLabel = rarity.charAt(0).toUpperCase() + rarity.slice(1);
         card.innerHTML = `
           <div class="shop-preview" style="background:${preview}"></div>
+          ${rarityBadgeClass ? `<span class="${rarityBadgeClass}">${rarityLabel}</span>` : ''}
           <span class="shop-skin-name">${skin.name}</span>
           <span class="shop-skin-cost">${skin.cost === 0 ? 'Free' : `<span class="coin-shine">🪙</span> ${skin.cost}`}</span>
           <button class="btn ${equipped ? 'btn-secondary' : 'btn-primary'} shop-action">
@@ -2489,8 +2492,11 @@
           const rarity = pet.cost === 0 ? 'common' : pet.cost < 100 ? 'rare' : pet.cost < 250 ? 'epic' : 'legendary';
           card.className = `shop-card shop-rarity-${rarity}`;
           card.style.animationDelay = `${index * 0.06}s`;
+          const petRarityBadgeClass = rarity === 'common' ? '' : `ds-badge ds-badge-${rarity}`;
+          const petRarityLabel = rarity.charAt(0).toUpperCase() + rarity.slice(1);
           card.innerHTML = `
             <div class="shop-preview pet-preview">${pet.icon}</div>
+            ${petRarityBadgeClass ? `<span class="${petRarityBadgeClass}">${petRarityLabel}</span>` : ''}
             <span class="shop-skin-name">${pet.name}</span>
             <span class="shop-skin-cost">${pet.cost === 0 ? 'Free' : `<span class="coin-shine">🪙</span> ${pet.cost}`}</span>
             <button class="btn ${equipped ? 'btn-secondary' : 'btn-primary'} shop-action">
@@ -2531,7 +2537,7 @@
             <strong>${done ? a.title : '⛓️ ' + a.title}</strong>
             <small>${a.desc}</small>
           </span>
-          <span class="achievement-state">${done ? '✅' : ''}</span>
+          <span class="ds-badge ${done ? 'ds-badge-completed' : 'ds-badge-locked'}">${done ? 'Completed' : 'Locked'}</span>
         `;
         list.appendChild(item);
       });
