@@ -302,10 +302,14 @@
     { emoji: '🍊', color: '#FFA23E' }
   ];
 
+  // Step timing (ms between grid moves) — higher = slower snake.
+  // Speeds reduced ~37.5% from the original values (multiplied by 1.6)
+  // so the game feels noticeably easier for a young child while
+  // keeping movement perfectly smooth (same interpolation logic).
   const LEVELS = {
-    easy:   { stepMs: 180, label: 'Easy' },
-    normal: { stepMs: 130, label: 'Normal' },
-    hard:   { stepMs: 90,  label: 'Hard' }
+    easy:   { stepMs: 288, label: 'Easy' },
+    normal: { stepMs: 208, label: 'Normal' },
+    hard:   { stepMs: 144, label: 'Hard' }
   };
 
   const GRID_SIZE = 18; // number of cells per row/column (square grid)
@@ -325,6 +329,7 @@
     shakeFrames: 0,
     secretMode: false,
     secretBuffer: '',
+    foodsEaten: 0, // raw count of food eaten, independent of score value
 
     init() {
       this.canvas = $('game-canvas');
@@ -355,6 +360,7 @@
       this.dir = { x: 1, y: 0 };
       this.nextDir = { x: 1, y: 0 };
       this.score = 0;
+      this.foodsEaten = 0;
       this.secretMode = false;
       this.secretBuffer = '';
       $('secret-banner').classList.remove('show');
@@ -430,10 +436,12 @@
       const head = this.snake[0];
       const newHead = { x: head.x + this.dir.x, y: head.y + this.dir.y };
 
-      // Wall collision
-      if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
-        return this.endGame();
-      }
+      // Screen wrapping: leaving one edge brings the snake back on the
+      // opposite edge instead of ending the game.
+      // Right -> Left, Left -> Right, Top -> Bottom, Bottom -> Top.
+      newHead.x = (newHead.x + GRID_SIZE) % GRID_SIZE;
+      newHead.y = (newHead.y + GRID_SIZE) % GRID_SIZE;
+
       // Self collision
       if (this.snake.some((s) => s.x === newHead.x && s.y === newHead.y)) {
         return this.endGame();
@@ -449,7 +457,8 @@
     },
 
     eatFood() {
-      this.score++;
+      this.score += 100; // each food is now worth 100 points
+      this.foodsEaten++;
       this.glowFrames = 10;
       Audio.eat();
       this.updateHud();
@@ -459,10 +468,10 @@
       const px = rect.left + (this.food.x + 0.5) * this.cell;
       const py = rect.top + (this.food.y + 0.5) * this.cell;
       FX.burst(px, py, [this.food.color, '#FFD700', '#FFFFFF']);
-      FX.floatText(px, py, '+1', this.food.color);
+      FX.floatText(px, py, '+100', this.food.color);
 
-      // Level-up celebration every 5 fruits
-      if (this.score % 5 === 0) {
+      // Level-up celebration every 5 fruits (based on fruit count, not points)
+      if (this.foodsEaten % 5 === 0) {
         Audio.levelUp();
         FX.confetti(60);
       }
