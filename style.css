@@ -187,6 +187,46 @@ button {
 .flowers::after { left: 70%; }
 
 /* =========================================================
+   V1.2 — EXTRA BACKGROUND DECORATION (additive only)
+   ========================================================= */
+.cloud-4 { width: 100px; height: 34px; top: 14%; left: -25%; animation: drift 60s linear infinite; animation-delay: -18s; }
+.cloud-4::before { width: 50px; height: 50px; top: -24px; left: 12px; }
+.cloud-4::after { width: 42px; height: 42px; top: -18px; left: 50px; }
+
+.butterfly-3 { bottom: 26%; left: 45%; font-size: 18px; animation-delay: -6s; animation-duration: 11s; }
+.butterfly-4 { bottom: 34%; right: 30%; font-size: 16px; animation-delay: -2s; animation-duration: 8s; }
+
+.tree {
+  position: absolute;
+  bottom: 12%;
+  font-size: 46px;
+  transform-origin: bottom center;
+  animation: tree-sway 5s ease-in-out infinite;
+  opacity: 0.9;
+}
+.tree-1 { left: 4%; animation-delay: 0s; }
+.tree-2 { right: 5%; font-size: 40px; animation-delay: -2.5s; }
+@keyframes tree-sway {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+}
+
+.mini-flowers {
+  position: absolute;
+  bottom: 5.5%;
+  left: 0; right: 0;
+  height: 4%;
+}
+.mini-flowers::before, .mini-flowers::after {
+  content: '🌸';
+  position: absolute;
+  font-size: 14px;
+  bottom: 0;
+}
+.mini-flowers::before { left: 35%; }
+.mini-flowers::after { left: 88%; }
+
+/* =========================================================
    SCREENS
    ========================================================= */
 .screen {
@@ -495,6 +535,36 @@ button {
 @keyframes rainbow-shift {
   0% { background-position: 0% 50%; }
   100% { background-position: 100% 50%; }
+}
+
+/* V1.2 — "every 1000 points" milestone banner. A gentle golden glow
+   pulse (not a flash) so it stays calm and child-friendly. */
+.milestone-banner {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  z-index: 8;
+  font-family: var(--font-display);
+  font-size: clamp(18px, 4.5vw, 30px);
+  padding: 12px 26px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #FFE9A8, var(--gold));
+  color: var(--ink);
+  text-shadow: 0 2px 3px rgba(255,255,255,0.5);
+  box-shadow: 0 0 0 rgba(255, 215, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  animation: gold-glow-pulse 1.6s ease-in-out infinite;
+}
+.milestone-banner.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+@keyframes gold-glow-pulse {
+  0%, 100% { box-shadow: 0 0 12px 2px rgba(255, 215, 0, 0.45); }
+  50% { box-shadow: 0 0 26px 8px rgba(255, 215, 0, 0.75); }
 }
 
 .touch-controls {

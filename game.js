@@ -117,6 +117,13 @@
       this.tone(880, 0.14, { type: 'triangle', volume: 0.18, delay: 0.06 });
     },
 
+    // V1.2 — happy little two-note chime that pitches up/down slightly
+    // depending on which fruit was eaten, so each fruit feels a bit different.
+    eatFruit(basePitch = 660) {
+      this.tone(basePitch, 0.12, { type: 'triangle', volume: 0.25 });
+      this.tone(basePitch * 1.33, 0.14, { type: 'triangle', volume: 0.18, delay: 0.06 });
+    },
+
     levelUp() {
       [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
         this.tone(f, 0.16, { type: 'triangle', volume: 0.22, delay: i * 0.09 })
@@ -222,8 +229,8 @@
     },
 
     // Big confetti rain for level-ups, victories, and secret mode.
-    confetti(amount = 120) {
-      const colors = ['#FF6F61', '#FFD93D', '#6FE08A', '#7FB8F0', '#B983FF', '#FFD700'];
+    // V1.2: now accepts an optional custom color palette (default palette unchanged).
+    confetti(amount = 120, colors = ['#FF6F61', '#FFD93D', '#6FE08A', '#7FB8F0', '#B983FF', '#FFD700']) {
       for (let i = 0; i < amount; i++) {
         this.particles.push({
           x: rand(0, this.canvas.width),
@@ -235,6 +242,24 @@
           color: colors[randInt(0, colors.length - 1)],
           shape: Math.random() > 0.5 ? 'circle' : 'square',
           spin: rand(-0.2, 0.2), angle: rand(0, Math.PI * 2),
+          confetti: true
+        });
+      }
+    },
+
+    // V1.2 §5 — a gentle shower of ⭐ glyphs for the 1000-point milestone.
+    starBurst(amount = 30) {
+      for (let i = 0; i < amount; i++) {
+        this.particles.push({
+          x: rand(0, this.canvas.width),
+          y: -20 * devicePixelRatio,
+          vx: rand(-0.6, 0.6) * devicePixelRatio,
+          vy: rand(1.5, 3.5) * devicePixelRatio,
+          life: 1, decay: rand(0.006, 0.01),
+          size: rand(14, 26) * devicePixelRatio,
+          color: '#FFD700',
+          shape: 'star',
+          spin: rand(-0.15, 0.15), angle: rand(0, Math.PI * 2),
           confetti: true
         });
       }
@@ -266,6 +291,11 @@
           ctx.beginPath();
           ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
           ctx.fill();
+        } else if (p.shape === 'star') {
+          ctx.font = `${p.size}px serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('⭐', 0, 0);
         } else {
           ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
         }
@@ -292,14 +322,37 @@
   };
 
   /* ===========================================================
+     V1.2 — MILESTONE CELEBRATION
+     Fires once every 1000 points: gold confetti + star shower +
+     a golden glowing banner that disappears after 3 seconds.
+     Does not touch the existing secret-NOAH banner/system.
+     =========================================================== */
+  const Milestone = {
+    timer: null,
+    show() {
+      const banner = $('milestone-banner');
+      if (!banner) return; // safety: no-op if markup isn't present
+      Audio.levelUp();
+      FX.confetti(90, ['#FFD700', '#FFF6C9', '#FFC300', '#FFFFFF']);
+      FX.starBurst(36);
+      banner.classList.add('show');
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => banner.classList.remove('show'), 3000);
+    }
+  };
+
+  /* ===========================================================
      6. THE GAME  (Snake + Food + Loop)
      =========================================================== */
+  // V1.2 — Better Food System: 6 fruits, each with its own point
+  // value and a slightly different "happy" pitch for its eat sound.
   const FOODS = [
-    { emoji: '🍎', color: '#FF6F61' },
-    { emoji: '🍓', color: '#FF4D6D' },
-    { emoji: '🍌', color: '#FFD93D' },
-    { emoji: '🍇', color: '#B983FF' },
-    { emoji: '🍊', color: '#FFA23E' }
+    { name: 'apple',      emoji: '🍎', color: '#FF6F61', points: 100, pitch: 660 },
+    { name: 'banana',     emoji: '🍌', color: '#FFD93D', points: 150, pitch: 600 },
+    { name: 'strawberry', emoji: '🍓', color: '#FF4D6D', points: 200, pitch: 700 },
+    { name: 'grapes',     emoji: '🍇', color: '#B983FF', points: 250, pitch: 740 },
+    { name: 'watermelon', emoji: '🍉', color: '#FF6F91', points: 300, pitch: 620 },
+    { name: 'pineapple',  emoji: '🍍', color: '#FFC93C', points: 500, pitch: 820 }
   ];
 
   // Step timing (ms between grid moves) — higher = slower snake.
@@ -457,10 +510,11 @@
     },
 
     eatFood() {
-      this.score += 100; // each food is now worth 100 points
+      const points = this.food.points || 100;
+      this.score += points; // V1.2 — each fruit is worth its own point value
       this.foodsEaten++;
       this.glowFrames = 10;
-      Audio.eat();
+      Audio.eatFruit(this.food.pitch || 660);
       this.updateHud();
 
       // Screen-space position of the food for particle/floater placement
@@ -468,12 +522,17 @@
       const px = rect.left + (this.food.x + 0.5) * this.cell;
       const py = rect.top + (this.food.y + 0.5) * this.cell;
       FX.burst(px, py, [this.food.color, '#FFD700', '#FFFFFF']);
-      FX.floatText(px, py, '+100', this.food.color);
+      FX.floatText(px, py, `+${points}`, this.food.color);
 
       // Level-up celebration every 5 fruits (based on fruit count, not points)
       if (this.foodsEaten % 5 === 0) {
         Audio.levelUp();
         FX.confetti(60);
+      }
+
+      // V1.2 §5 — big "AMAZING NOAH" celebration every 1000 points
+      if (Math.floor(this.score / 1000) > Math.floor((this.score - points) / 1000)) {
+        Milestone.show();
       }
 
       this.placeFood();
@@ -551,14 +610,17 @@
       ctx.fill();
       ctx.restore();
 
-      // Glow
+      // Glow (V1.2: added a gentle "cute" pulse on top of the existing bounce)
       ctx.save();
       ctx.shadowColor = f.color;
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = 16;
+      const pulse = 1 + Math.sin(f.bounce * 2) * 0.06;
+      ctx.translate(cx, cy);
+      ctx.scale(pulse, pulse);
       ctx.font = `${this.cell * 0.8}px serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(f.emoji, cx, cy);
+      ctx.fillText(f.emoji, 0, 0);
       ctx.restore();
     },
 
@@ -626,6 +688,19 @@
           ctx.fill();
         }
       });
+
+      // V1.2 §4 — tiny smile, always facing the current direction of travel
+      const angle = Math.atan2(this.dir.y, this.dir.x);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(angle);
+      ctx.strokeStyle = 'rgba(30, 60, 40, 0.55)';
+      ctx.lineWidth = Math.max(1, this.cell * 0.045);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(this.cell * 0.06, this.cell * 0.05, this.cell * 0.14, -0.25, 0.85);
+      ctx.stroke();
+      ctx.restore();
     },
 
     updateHud() {
