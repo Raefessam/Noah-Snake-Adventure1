@@ -275,6 +275,21 @@ button {
   100% { transform: translateY(115vh) rotate(360deg); }
 }
 
+.sparkle {
+  position: absolute;
+  font-size: 14px;
+  opacity: 0;
+  animation: sparkle-twinkle 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.sparkle-1 { top: 18%; left: 15%; animation-delay: 0s; }
+.sparkle-2 { top: 50%; left: 82%; animation-delay: -1.6s; animation-duration: 4.2s; }
+.sparkle-3 { top: 65%; left: 40%; animation-delay: -2.8s; animation-duration: 3.8s; }
+@keyframes sparkle-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.6); }
+  50% { opacity: 0.9; transform: scale(1.1); }
+}
+
 /* =========================================================
    SCREENS
    ========================================================= */
@@ -417,6 +432,8 @@ button {
 }
 
 .btn {
+  position: relative;
+  overflow: hidden;
   font-size: 16px;
   font-weight: 800;
   color: var(--white);
@@ -429,9 +446,27 @@ button {
   transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
   box-shadow: 0 6px 0 rgba(0,0,0,0.15), 0 8px 16px rgba(0,0,0,0.12);
 }
-.btn:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,0.15); }
-.btn:hover { filter: brightness(1.06); }
+.btn:active { transform: translateY(4px) scale(0.97); box-shadow: 0 2px 0 rgba(0,0,0,0.15); }
+.btn:hover { filter: brightness(1.08); box-shadow: 0 6px 0 rgba(0,0,0,0.15), 0 8px 20px rgba(255,215,0,0.35), 0 8px 16px rgba(0,0,0,0.12); }
 .btn-icon { font-size: 20px; }
+
+/* Visual Evolution — CSS-only touch/press ripple, no JS needed */
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 60%);
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  pointer-events: none;
+}
+.btn:active::after {
+  opacity: 1;
+  transform: scale(1.6);
+  transition: opacity 0s, transform 0s;
+}
 
 .btn-primary { background: linear-gradient(180deg, #6FE08A, #3EA55D); }
 .btn-lg { font-size: 20px; padding: 18px 22px; }
@@ -533,28 +568,47 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 14px 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 18px;
   pointer-events: none;
 }
 .hud-pill, .hud-btn { pointer-events: auto; }
 .hud-pill {
-  background: rgba(255,255,255,0.92);
+  background: rgba(255,255,255,0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.6);
   border-radius: 999px;
   padding: 8px 16px;
   font-weight: 800;
   color: var(--ink);
-  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  box-shadow: 0 6px 16px rgba(35,64,90,0.18);
   font-size: 15px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .hud-btn {
   margin-left: auto;
   width: 42px; height: 42px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.92);
-  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  background: rgba(255,255,255,0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.6);
+  box-shadow: 0 6px 16px rgba(35,64,90,0.18);
   font-size: 18px;
+  transition: transform 0.15s ease;
 }
+.hud-btn:active { transform: scale(0.9); }
+
+/* Visual Evolution — brief pop when a HUD number changes (score/coins/level) */
+.hud-pill.pop span { animation: hud-pop 0.35s ease; }
+@keyframes hud-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); color: var(--coral-dark); }
+  100% { transform: scale(1); }
+}
+.hud-pill span { display: inline-block; }
 
 .canvas-wrap {
   position: relative;
@@ -895,6 +949,23 @@ button {
   pointer-events: none;
   width: 100%;
   height: 100%;
+}
+
+.screen-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255,215,0,0.35) 0%, rgba(255,215,0,0) 70%);
+  opacity: 0;
+}
+.screen-flash.flash {
+  animation: screen-flash-pulse 0.5s ease-out;
+}
+@keyframes screen-flash-pulse {
+  0% { opacity: 0; }
+  30% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* =========================================================

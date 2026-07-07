@@ -176,6 +176,13 @@
       this.tone(1318.5, 0.12, { type: 'square', volume: 0.18, delay: 0.05 });
     },
 
+    // Visual Evolution §11 — a bright little fanfare for unlocking an achievement.
+    achievement() {
+      [783.99, 987.77, 1174.66, 1567.98].forEach((f, i) =>
+        this.tone(f, 0.16, { type: 'triangle', volume: 0.2, delay: i * 0.08 })
+      );
+    },
+
     eat() {
       this.tone(660, 0.12, { type: 'triangle', volume: 0.25 });
       this.tone(880, 0.14, { type: 'triangle', volume: 0.18, delay: 0.06 });
@@ -391,6 +398,18 @@
      a golden glowing banner that disappears after 3 seconds.
      Does not touch the existing secret-NOAH banner/system.
      =========================================================== */
+  // Visual Evolution — a very brief, gentle full-screen flash used for big
+  // celebrations (milestones, level-ups). Non-disruptive: short, low-opacity,
+  // and skipped automatically under reduced-motion (handled by existing CSS rule).
+  const flashScreen = () => {
+    const el = $('screen-flash');
+    if (!el) return;
+    el.classList.remove('flash');
+    // force reflow so the animation can restart if triggered again quickly
+    void el.offsetWidth;
+    el.classList.add('flash');
+  };
+
   const Milestone = {
     timer: null,
     show() {
@@ -399,6 +418,7 @@
       Audio.levelUp();
       FX.confetti(90, ['#FFD700', '#FFF6C9', '#FFC300', '#FFFFFF']);
       FX.starBurst(36);
+      flashScreen(); // Visual Evolution §9
       banner.classList.add('show');
       clearTimeout(this.timer);
       this.timer = setTimeout(() => banner.classList.remove('show'), 3000);
@@ -423,10 +443,12 @@
     show(level) {
       const banner = $('levelup-banner');
       if (!banner) return;
-      banner.innerHTML = `🌟 LEVEL UP! <br> Level ${level}`;
+      banner.innerHTML = `🌟 LEVEL UP! <br> Congratulations Noah! <br> Level ${level}`;
       Audio.levelUp();
       FX.confetti(110, ['#FFD700', '#FFF6C9', '#FFC300', '#FFFFFF']);
       FX.starBurst(26);
+      setTimeout(() => FX.starBurst(20), 220); // Visual Evolution — a second burst for a "fireworks" feel
+      flashScreen(); // Visual Evolution §9
       banner.classList.add('show');
       clearTimeout(this.timer);
       this.timer = setTimeout(() => banner.classList.remove('show'), 2800);
@@ -549,6 +571,7 @@
     canvas: null, ctx: null,
     cell: 20,
     snake: [], dir: { x: 1, y: 0 }, nextDir: { x: 1, y: 0 },
+    prevSnake: [], // Visual Evolution — snapshot before each tick, for smooth interpolated rendering
     food: null,
     score: 0,
     difficulty: 'normal',
@@ -566,6 +589,7 @@
     sessionSeconds: 0, // V1.3 §6 — playtime accumulated this game, flushed on stop
     coinsThisGame: 0, // Magic Forest Update — for the improved Game Over screen
     achievementsAtStart: 0, // snapshot to detect newly-unlocked achievements
+    lastAchievementCount: 0, // Visual Evolution — for live achievement-sound feedback
 
     init() {
       this.canvas = $('game-canvas');
@@ -575,10 +599,11 @@
     },
 
     resizeCanvas() {
-      // Keep the play field a responsive square that fits the viewport.
-      const maxW = window.innerWidth * 0.94;
-      const maxH = window.innerHeight * 0.78;
-      const size = Math.floor(Math.min(maxW, maxH, 640) / GRID_SIZE) * GRID_SIZE;
+      // Visual Evolution — board now fills ~82-85% of the available screen
+      // (was 78%/94%), same centering/responsiveness logic, larger cap.
+      const maxW = window.innerWidth * 0.90;
+      const maxH = window.innerHeight * 0.84;
+      const size = Math.floor(Math.min(maxW, maxH, 720) / GRID_SIZE) * GRID_SIZE;
       this.cell = size / GRID_SIZE;
       this.canvas.width = size * devicePixelRatio;
       this.canvas.height = size * devicePixelRatio;
@@ -593,6 +618,7 @@
       this.stepMs = LEVELS[difficulty].stepMs;
       const mid = Math.floor(GRID_SIZE / 2);
       this.snake = [{ x: mid - 1, y: mid }, { x: mid - 2, y: mid }, { x: mid - 3, y: mid }];
+      this.prevSnake = this.snake.map((s) => ({ x: s.x, y: s.y }));
       this.dir = { x: 1, y: 0 };
       this.nextDir = { x: 1, y: 0 };
       this.score = 0;
@@ -602,6 +628,7 @@
       this.sessionSeconds = 0;
       this.coinsThisGame = 0;
       this.achievementsAtStart = ACHIEVEMENTS.filter((a) => a.done(Storage.data)).length;
+      this.lastAchievementCount = this.achievementsAtStart;
       this.secretMode = false;
       this.secretBuffer = '';
       $('secret-banner').classList.remove('show');
@@ -655,7 +682,7 @@
         pos = { x: randInt(0, GRID_SIZE - 1), y: randInt(0, GRID_SIZE - 1) };
       } while (this.snake.some((s) => s.x === pos.x && s.y === pos.y));
       const kind = FOODS[randInt(0, FOODS.length - 1)];
-      this.food = { ...pos, ...kind, bounce: 0 };
+      this.food = { ...pos, ...kind, bounce: 0, age: 0 };
     },
 
     setDirection(x, y) {
@@ -681,6 +708,7 @@
 
     tick() {
       this.sessionSeconds += this.stepMs / 1000; // V1.3 §6 — playtime tracking
+      this.prevSnake = this.snake.map((s) => ({ x: s.x, y: s.y })); // Visual Evolution
 
       this.dir = this.nextDir;
       const head = this.snake[0];
@@ -728,6 +756,9 @@
       const py = rect.top + (this.food.y + 0.5) * this.cell;
       FX.burst(px, py, [this.food.color, '#FFD700', '#FFFFFF']);
       FX.floatText(px, py, `+${points}`, this.food.color);
+      FX.starBurst(6); // Visual Evolution — tiny star burst on every fruit
+      if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) { /* unsupported */ } }
+      this.checkNewAchievements(); // Visual Evolution §11
 
       // Level-up celebration every 5 fruits (based on fruit count, not points)
       if (this.foodsEaten % 5 === 0) {
@@ -784,6 +815,16 @@
       const py = rect.top + (this.snake[0].y + 0.5) * this.cell;
       FX.burst(px, py, ['#FFD700', '#FFF6C9', '#FFFFFF']);
       FX.floatText(px, py, '+1 🪙', '#FFD700');
+      this.checkNewAchievements(); // Visual Evolution §11
+    },
+
+    // Visual Evolution §11 — plays a distinct little chime the instant an
+    // achievement becomes newly true, instead of only finding out later
+    // on the Achievements screen.
+    checkNewAchievements() {
+      const count = ACHIEVEMENTS.filter((a) => a.done(Storage.data)).length;
+      if (count > this.lastAchievementCount) Audio.achievement();
+      this.lastAchievementCount = count;
     },
 
     triggerSecretMode() {
@@ -871,6 +912,7 @@
     drawFood(ctx) {
       const f = this.food;
       f.bounce = (f.bounce + 0.15) % (Math.PI * 2);
+      f.age = Math.min((f.age || 0) + 1, 18); // Visual Evolution — appear-in progress
       const bounceOffset = Math.sin(f.bounce) * 3;
       const cx = f.x * this.cell + this.cell / 2;
       const cy = f.y * this.cell + this.cell / 2 + bounceOffset;
@@ -884,30 +926,67 @@
       ctx.fill();
       ctx.restore();
 
-      // Glow (V1.2: added a gentle "cute" pulse on top of the existing bounce)
+      // Visual Evolution — appear progress: fresh fruit glows brighter and
+      // scales in from small, then settles into its normal gentle pulse.
+      const appear = f.age / 18; // 0 (just placed) -> 1 (settled)
+      const pulse = (1 + Math.sin(f.bounce * 2) * 0.06) * (0.6 + 0.4 * appear);
+      const wobble = Math.sin(f.bounce * 0.6) * 0.12; // tiny rotation
+
       ctx.save();
       ctx.shadowColor = f.color;
-      ctx.shadowBlur = 16;
-      const pulse = 1 + Math.sin(f.bounce * 2) * 0.06;
+      ctx.shadowBlur = 16 + (1 - appear) * 14; // extra glow while appearing
       ctx.translate(cx, cy);
+      ctx.rotate(wobble);
       ctx.scale(pulse, pulse);
-      ctx.font = `${this.cell * 0.8}px serif`;
+      ctx.font = `${this.cell * 1.0}px serif`; // Visual Evolution — ~25% bigger (was 0.8)
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      ctx.globalAlpha = 0.5 + 0.5 * appear;
       ctx.fillText(f.emoji, 0, 0);
       ctx.restore();
     },
 
     drawSnake(ctx) {
       const rainbow = ['#FF6F61', '#FFD93D', '#6FE08A', '#7FB8F0', '#B983FF'];
+      const t = clamp(this.acc / this.stepMs, 0, 1); // Visual Evolution — interpolation progress
+      const now = performance.now();
+      const skin = SKINS[Storage.data.currentSkin] || SKINS.green; // V1.3 §3
+
       this.snake.forEach((seg, i) => {
-        const cx = seg.x * this.cell + this.cell / 2;
-        const cy = seg.y * this.cell + this.cell / 2;
+        // Visual Evolution — interpolate from the pre-tick position for smooth
+        // continuous motion instead of a grid-cell "jump" every step.
+        // Each rendered slot interpolates from where it was one tick ago
+        // to where it is now — this is what produces the smooth "sliding
+        // forward" look for the whole body, not just the head.
+        const prevPos = this.prevSnake[i];
+        let gx = seg.x, gy = seg.y;
+        if (prevPos) {
+          const dx = seg.x - prevPos.x, dy = seg.y - prevPos.y;
+          if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) { // skip interpolation across a screen-wrap jump
+            gx = prevPos.x + dx * t;
+            gy = prevPos.y + dy * t;
+          }
+        }
+
+        let cx = gx * this.cell + this.cell / 2;
+        let cy = gy * this.cell + this.cell / 2;
         const isHead = i === 0;
-        const radius = isHead ? this.cell * 0.48 : this.cell * 0.42 * (1 - i / (this.snake.length * 2.2));
+        const isTail = i === this.snake.length - 1;
+
+        // Visual Evolution — gentle idle "breathing" pulse along the body
+        const breathe = 1 + Math.sin(now / 500 + i * 0.3) * 0.03;
+        // Visual Evolution — a tiny tail wag, perpendicular to travel direction
+        if (isTail && this.snake.length > 1) {
+          const perpX = this.dir.y !== 0 ? 1 : 0;
+          const perpY = this.dir.x !== 0 ? 1 : 0;
+          const wag = Math.sin(now / 220) * this.cell * 0.06;
+          cx += perpX * wag;
+          cy += perpY * wag;
+        }
+
+        const radius = (isHead ? this.cell * 0.48 : this.cell * 0.42 * (1 - i / (this.snake.length * 2.2))) * breathe;
 
         let bodyColor;
-        const skin = SKINS[Storage.data.currentSkin] || SKINS.green; // V1.3 §3
         if (this.secretMode) {
           bodyColor = rainbow[i % rainbow.length];
         } else if (this.glowFrames > 0) {
@@ -922,10 +1001,24 @@
         if (this.glowFrames > 0 || this.secretMode) {
           ctx.shadowColor = '#FFD700';
           ctx.shadowBlur = 16;
+        } else {
+          // Visual Evolution — soft resting shadow under each segment
+          ctx.shadowColor = 'rgba(0,0,0,0.18)';
+          ctx.shadowBlur = 6;
+          ctx.shadowOffsetY = 2;
         }
         ctx.fillStyle = bodyColor;
         ctx.beginPath();
         ctx.arc(cx, cy, Math.max(radius, 4), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Visual Evolution — subtle glossy highlight for a soft, alive look
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.ellipse(cx - radius * 0.32, cy - radius * 0.35, radius * 0.38, radius * 0.24, -0.6, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
@@ -949,7 +1042,7 @@
     drawFace(ctx, cx, cy) {
       const eyeOffsetX = this.dir.x !== 0 ? this.dir.x * this.cell * 0.16 : this.cell * 0.16;
       const eyeOffsetY = this.dir.y !== 0 ? this.dir.y * this.cell * 0.16 : -this.cell * 0.12;
-      const eyeSize = this.cell * 0.11;
+      const eyeSize = this.cell * 0.13; // Visual Evolution — slightly larger eyes (was 0.11)
 
       // Blink cycle: eyes close briefly every ~3 seconds
       const blinking = Math.floor(performance.now() / 180) % 26 === 0;
@@ -991,14 +1084,26 @@
       ctx.restore();
     },
 
+    // Visual Evolution — briefly "pop" a HUD pill when its number changes,
+    // giving a lightweight animated-counter feel without a persistent loop.
+    popHud(el) {
+      if (!el) return;
+      const pill = el.closest('.hud-pill');
+      if (!pill) return;
+      pill.classList.remove('pop');
+      void pill.offsetWidth; // restart animation if triggered again quickly
+      pill.classList.add('pop');
+    },
+
     updateHud() {
-      $('hud-score').textContent = this.score;
+      const scoreEl = $('hud-score');
+      if (scoreEl && scoreEl.textContent != this.score) { scoreEl.textContent = this.score; this.popHud(scoreEl); }
       $('hud-best').textContent = Storage.data.highScore;
       $('menu-high-score').textContent = Storage.data.highScore;
       const levelEl = $('hud-level');
-      if (levelEl) levelEl.textContent = this.level; // V1.3 §1
+      if (levelEl && levelEl.textContent != this.level) { levelEl.textContent = this.level; this.popHud(levelEl); } // V1.3 §1
       const coinsEl = $('hud-coins');
-      if (coinsEl) coinsEl.textContent = Storage.data.coins; // V1.3 §2
+      if (coinsEl && coinsEl.textContent != Storage.data.coins) { coinsEl.textContent = Storage.data.coins; this.popHud(coinsEl); } // V1.3 §2
     },
 
     pause() {
