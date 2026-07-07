@@ -60,6 +60,15 @@
           <button id="btn-play" class="btn btn-primary btn-lg">
             <span class="btn-icon">▶️</span> Play
           </button>
+          <button id="btn-shop" class="btn btn-secondary">
+            <span class="btn-icon">🛍️</span> Shop
+          </button>
+          <button id="btn-achievements" class="btn btn-secondary">
+            <span class="btn-icon">🏆</span> Achievements
+          </button>
+          <button id="btn-stats" class="btn btn-secondary">
+            <span class="btn-icon">📊</span> Statistics
+          </button>
           <button id="btn-settings" class="btn btn-secondary">
             <span class="btn-icon">⚙️</span> Settings
           </button>
@@ -147,11 +156,47 @@
       </div>
     </section>
 
+    <!-- ============ V1.3: SHOP SCREEN ============ -->
+    <section id="screen-shop" class="screen">
+      <div class="menu-card">
+        <h2 class="panel-title">Character Shop</h2>
+        <div class="shop-balance">🪙 Coins: <strong id="shop-coin-balance">0</strong></div>
+        <div class="shop-grid" id="shop-grid"><!-- filled in by game.js --></div>
+        <button id="btn-shop-back" class="btn btn-secondary">⬅️ Back</button>
+      </div>
+    </section>
+
+    <!-- ============ V1.3: ACHIEVEMENTS SCREEN ============ -->
+    <section id="screen-achievements" class="screen">
+      <div class="menu-card">
+        <h2 class="panel-title">Achievements</h2>
+        <div class="achievement-list" id="achievements-list"><!-- filled in by game.js --></div>
+        <button id="btn-achievements-back" class="btn btn-secondary">⬅️ Back</button>
+      </div>
+    </section>
+
+    <!-- ============ V1.3: STATISTICS SCREEN ============ -->
+    <section id="screen-stats" class="screen">
+      <div class="menu-card">
+        <h2 class="panel-title">Statistics</h2>
+        <div class="settings-row"><span class="settings-label">🏆 Best Score</span><strong id="stat-best-score">0</strong></div>
+        <div class="settings-row"><span class="settings-label">🎮 Games Played</span><strong id="stat-games-played">0</strong></div>
+        <div class="settings-row"><span class="settings-label">🍎 Total Fruits</span><strong id="stat-total-fruits">0</strong></div>
+        <div class="settings-row"><span class="settings-label">🪙 Total Coins</span><strong id="stat-total-coins">0</strong></div>
+        <div class="settings-row"><span class="settings-label">🎖️ Highest Level</span><strong id="stat-highest-level">1</strong></div>
+        <div class="settings-row"><span class="settings-label">🍓 Favorite Fruit</span><strong id="stat-favorite-fruit">—</strong></div>
+        <div class="settings-row"><span class="settings-label">⏱️ Time Played</span><strong id="stat-time-played">0m 0s</strong></div>
+        <button id="btn-stats-back" class="btn btn-secondary" style="margin-top:14px;">⬅️ Back</button>
+      </div>
+    </section>
+
     <!-- ============ GAME SCREEN ============ -->
     <section id="screen-game" class="screen">
       <div class="game-hud">
         <div class="hud-pill">🍎 <span id="hud-score">0</span></div>
         <div class="hud-pill">🏆 <span id="hud-best">0</span></div>
+        <div class="hud-pill">🎖️ Lv.<span id="hud-level">1</span></div>
+        <div class="hud-pill">🪙 <span id="hud-coins">0</span></div>
         <button id="btn-pause" class="hud-btn" aria-label="Pause">⏸️</button>
       </div>
 
@@ -163,6 +208,8 @@
         <div id="secret-banner" class="secret-banner">⭐ YOU ARE A SUPER HERO NOAH ⭐</div>
         <!-- V1.2: new "every 1000 points" celebration banner -->
         <div id="milestone-banner" class="milestone-banner">⭐ AMAZING NOAH ⭐</div>
+        <!-- V1.3: level-up celebration banner -->
+        <div id="levelup-banner" class="levelup-banner">🌟 LEVEL UP!</div>
       </div>
 
       <!-- Touch controls (shown on touch devices) -->
@@ -203,6 +250,15 @@
         <p id="new-record-msg" class="new-record">🌟 New Record! 🌟</p>
         <button id="btn-play-again" class="btn btn-primary">🔁 Play Again</button>
         <button id="btn-gameover-menu" class="btn btn-secondary">🏠 Main Menu</button>
+      </div>
+    </div>
+
+    <!-- ============ V1.3: DAILY REWARD OVERLAY ============ -->
+    <div id="overlay-daily-reward" class="overlay">
+      <div class="overlay-card">
+        <h2 class="panel-title">🎁 Daily Reward!</h2>
+        <p class="daily-reward-amount" id="daily-reward-amount">+20 Coins</p>
+        <button id="btn-daily-reward-close" class="btn btn-primary">Yay! 🎉</button>
       </div>
     </div>
 

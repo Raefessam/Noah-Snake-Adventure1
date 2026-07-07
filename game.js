@@ -39,15 +39,34 @@
       sfxOn: true,
       musicOn: true,
       reducedMotion: false,
-      unlockedRewards: []
+      unlockedRewards: [],
+      // V1.3 additions — all new fields, fully backward compatible with v1.2 saves
+      coins: 0,
+      unlockedSkins: ['green'],
+      currentSkin: 'green',
+      lastDailyReward: 0,
+      stats: {
+        gamesPlayed: 0,
+        totalFruits: 0,
+        totalCoinsEarned: 0,
+        highestLevel: 1,
+        fruitCounts: {},
+        timePlayed: 0 // seconds
+      }
     },
     data: null,
     load() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        this.data = raw ? { ...this.defaults, ...JSON.parse(raw) } : { ...this.defaults };
+        const parsed = raw ? JSON.parse(raw) : {};
+        this.data = { ...this.defaults, ...parsed };
+        // Merge nested "stats" so an old save missing a new stat field
+        // still gets sensible defaults instead of losing the whole object.
+        this.data.stats = { ...this.defaults.stats, ...(parsed.stats || {}) };
+        if (!Array.isArray(this.data.unlockedSkins)) this.data.unlockedSkins = ['green'];
+        if (!this.data.unlockedSkins.includes('green')) this.data.unlockedSkins.push('green');
       } catch (e) {
-        this.data = { ...this.defaults };
+        this.data = { ...this.defaults, stats: { ...this.defaults.stats } };
       }
       return this.data;
     },
@@ -65,6 +84,44 @@
         this.data.unlockedRewards.push(name);
         this.save();
       }
+    },
+
+    // ---------- V1.3 helpers ----------
+    addCoins(amount) {
+      this.data.coins += amount;
+      this.data.stats.totalCoinsEarned += amount;
+      this.save();
+    },
+    spendCoins(amount) {
+      if (this.data.coins < amount) return false;
+      this.data.coins -= amount;
+      this.save();
+      return true;
+    },
+    unlockSkin(id) {
+      if (!this.data.unlockedSkins.includes(id)) {
+        this.data.unlockedSkins.push(id);
+        this.save();
+      }
+    },
+    recordFruit(name) {
+      this.data.stats.totalFruits++;
+      this.data.stats.fruitCounts[name] = (this.data.stats.fruitCounts[name] || 0) + 1;
+      this.save();
+    },
+    recordGamePlayed() {
+      this.data.stats.gamesPlayed++;
+      this.save();
+    },
+    recordLevel(level) {
+      if (level > this.data.stats.highestLevel) {
+        this.data.stats.highestLevel = level;
+        this.save();
+      }
+    },
+    addPlayTime(seconds) {
+      this.data.stats.timePlayed += seconds;
+      this.save();
     }
   };
   Storage.load();
@@ -111,6 +168,12 @@
     },
 
     click() { this.tone(440, 0.08, { type: 'square', volume: 0.15 }); },
+
+    // V1.3 §2 — bright little "cha-ching" for collecting a coin.
+    coin() {
+      this.tone(988, 0.08, { type: 'square', volume: 0.2 });
+      this.tone(1318.5, 0.12, { type: 'square', volume: 0.18, delay: 0.05 });
+    },
 
     eat() {
       this.tone(660, 0.12, { type: 'triangle', volume: 0.25 });
@@ -175,7 +238,7 @@
      (pause, game over).
      =========================================================== */
   const Screens = {
-    all: ['menu', 'levels', 'settings', 'credits', 'game'],
+    all: ['menu', 'levels', 'settings', 'credits', 'game', 'shop', 'achievements', 'stats'],
     show(name) {
       this.all.forEach((s) => $(`screen-${s}`).classList.toggle('active', s === name));
     },
@@ -342,6 +405,92 @@
   };
 
   /* ===========================================================
+     V1.3 §1 — LEVEL SYSTEM
+     Score-based progression, purely additive on top of scoring.
+     =========================================================== */
+  const LEVEL_THRESHOLDS = [0, 1000, 2500, 5000, 8000]; // index 0 -> Level 1, etc.
+  const getLevelForScore = (score) => {
+    let level = 1;
+    for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {
+      if (score >= LEVEL_THRESHOLDS[i]) level = i + 1;
+    }
+    return level;
+  };
+
+  const LevelUp = {
+    timer: null,
+    show(level) {
+      const banner = $('levelup-banner');
+      if (!banner) return;
+      banner.innerHTML = `🌟 LEVEL UP! <br> Level ${level}`;
+      Audio.levelUp();
+      FX.confetti(110, ['#FFD700', '#FFF6C9', '#FFC300', '#FFFFFF']);
+      FX.starBurst(26);
+      banner.classList.add('show');
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => banner.classList.remove('show'), 2800);
+    }
+  };
+
+  /* ===========================================================
+     V1.3 §4 — DAILY REWARD
+     Grants +20 coins once every 24 hours. Checked once at
+     bootstrap; entirely additive, doesn't touch the save loader.
+     =========================================================== */
+  const DAILY_REWARD_COINS = 20;
+  const DAILY_REWARD_MS = 24 * 60 * 60 * 1000;
+  const DailyReward = {
+    checkAndGrant() {
+      const now = Date.now();
+      const last = Storage.data.lastDailyReward || 0;
+      if (now - last < DAILY_REWARD_MS) return;
+      Storage.data.lastDailyReward = now;
+      Storage.addCoins(DAILY_REWARD_COINS);
+      const amountEl = $('daily-reward-amount');
+      if (amountEl) amountEl.textContent = `+${DAILY_REWARD_COINS} Coins`;
+      Screens.overlay('daily-reward', true);
+      Audio.levelUp();
+      FX.confetti(80, ['#FFD700', '#FFF6C9', '#FFC300', '#FFFFFF']);
+    }
+  };
+
+  /* ===========================================================
+     V1.3 §3 — CHARACTER SHOP (skin definitions)
+     'rainbow' cycles the same rainbow palette already used by
+     Secret NOAH Mode; that special mode still overrides everything
+     while it's active, exactly as it did in v1.2.
+     =========================================================== */
+  const SKINS = {
+    green:  { name: 'Default Green', cost: 0,   bodyColor: '#5FCB6C', headColor: '#4CAF50', rainbow: false },
+    blue:   { name: 'Blue Snake',    cost: 20,  bodyColor: '#7FB8F0', headColor: '#2E6FD9', rainbow: false },
+    rainbow:{ name: 'Rainbow Snake', cost: 50,  bodyColor: '#B983FF', headColor: '#B983FF', rainbow: true  },
+    golden: { name: 'Golden Snake',  cost: 100, bodyColor: '#FFE066', headColor: '#FFD700', rainbow: false },
+    pink:   { name: 'Cute Pink Snake', cost: 150, bodyColor: '#FFAFCC', headColor: '#FF6F91', rainbow: false }
+  };
+
+  /* ===========================================================
+     V1.3 §5 — ACHIEVEMENTS
+     Each achievement's "done" state is computed live from Storage
+     stats/data, so there's nothing extra to keep in sync or save.
+     =========================================================== */
+  const ACHIEVEMENTS = [
+    { id: 'first_fruit', icon: '🍎', title: 'First Fruit', desc: 'Eat your very first fruit',
+      done: (d) => d.stats.totalFruits >= 1 },
+    { id: 'score_1000', icon: '⭐', title: 'Score 1000', desc: 'Reach 1000 points in one game',
+      done: (d) => d.highScore >= 1000 },
+    { id: 'score_5000', icon: '🌟', title: 'Score 5000', desc: 'Reach 5000 points in one game',
+      done: (d) => d.highScore >= 5000 },
+    { id: 'fruits_50', icon: '🍇', title: 'Fruit Fan', desc: 'Collect 50 fruits total',
+      done: (d) => d.stats.totalFruits >= 50 },
+    { id: 'fruits_100', icon: '🍉', title: 'Fruit Master', desc: 'Collect 100 fruits total',
+      done: (d) => d.stats.totalFruits >= 100 },
+    { id: 'games_10', icon: '🎮', title: 'Dedicated Player', desc: 'Play 10 games',
+      done: (d) => d.stats.gamesPlayed >= 10 },
+    { id: 'rainbow_unlocked', icon: '🐍', title: 'Unlock Rainbow Snake', desc: 'Unlock the Rainbow Snake skin',
+      done: (d) => d.unlockedSkins.includes('rainbow') }
+  ];
+
+  /* ===========================================================
      6. THE GAME  (Snake + Food + Loop)
      =========================================================== */
   // V1.2 — Better Food System: 6 fruits, each with its own point
@@ -383,6 +532,9 @@
     secretMode: false,
     secretBuffer: '',
     foodsEaten: 0, // raw count of food eaten, independent of score value
+    level: 1, // V1.3 §1
+    coin: null, // V1.3 §2 — current coin on the board, or null
+    sessionSeconds: 0, // V1.3 §6 — playtime accumulated this game, flushed on stop
 
     init() {
       this.canvas = $('game-canvas');
@@ -414,6 +566,9 @@
       this.nextDir = { x: 1, y: 0 };
       this.score = 0;
       this.foodsEaten = 0;
+      this.level = 1;
+      this.coin = null;
+      this.sessionSeconds = 0;
       this.secretMode = false;
       this.secretBuffer = '';
       $('secret-banner').classList.remove('show');
@@ -421,6 +576,7 @@
       this.shakeFrames = 0;
       this.placeFood();
       this.updateHud();
+      Storage.recordGamePlayed(); // V1.3 §6
       this.paused = false;
       this.running = false; // becomes true after countdown
       this.runCountdown();
@@ -485,6 +641,8 @@
     },
 
     tick() {
+      this.sessionSeconds += this.stepMs / 1000; // V1.3 §6 — playtime tracking
+
       this.dir = this.nextDir;
       const head = this.snake[0];
       const newHead = { x: head.x + this.dir.x, y: head.y + this.dir.y };
@@ -502,6 +660,11 @@
 
       this.snake.unshift(newHead);
 
+      // V1.3 §2 — coin collision (checked separately from food)
+      if (this.coin && newHead.x === this.coin.x && newHead.y === this.coin.y) {
+        this.collectCoin();
+      }
+
       if (newHead.x === this.food.x && newHead.y === this.food.y) {
         this.eatFood();
       } else {
@@ -511,10 +674,13 @@
 
     eatFood() {
       const points = this.food.points || 100;
+      const eatenName = this.food.name || 'apple';
+      const previousScore = this.score;
       this.score += points; // V1.2 — each fruit is worth its own point value
       this.foodsEaten++;
       this.glowFrames = 10;
       Audio.eatFruit(this.food.pitch || 660);
+      Storage.recordFruit(eatenName); // V1.3 §6
       this.updateHud();
 
       // Screen-space position of the food for particle/floater placement
@@ -531,14 +697,53 @@
       }
 
       // V1.2 §5 — big "AMAZING NOAH" celebration every 1000 points
-      if (Math.floor(this.score / 1000) > Math.floor((this.score - points) / 1000)) {
+      if (Math.floor(this.score / 1000) > Math.floor(previousScore / 1000)) {
         Milestone.show();
       }
 
+      // V1.3 §1 — level progression, based on the real-money score thresholds
+      const newLevel = getLevelForScore(this.score);
+      if (newLevel > this.level) {
+        this.level = newLevel;
+        LevelUp.show(newLevel);
+        Storage.recordLevel(newLevel);
+      }
+
       this.placeFood();
+      this.maybeSpawnCoin(); // V1.3 §2
 
       const best = Math.max(Storage.data.highScore, this.score);
       if (best > Storage.data.highScore) Storage.set('highScore', best);
+    },
+
+    // V1.3 §2 — coin spawning & collection
+    maybeSpawnCoin() {
+      if (this.coin) return; // only one coin on the board at a time
+      if (Math.random() < 0.35) this.placeCoin();
+    },
+
+    placeCoin() {
+      let pos, tries = 0;
+      do {
+        pos = { x: randInt(0, GRID_SIZE - 1), y: randInt(0, GRID_SIZE - 1) };
+        tries++;
+      } while (tries < 50 && (
+        this.snake.some((s) => s.x === pos.x && s.y === pos.y) ||
+        (this.food && this.food.x === pos.x && this.food.y === pos.y)
+      ));
+      this.coin = { ...pos, bounce: 0 };
+    },
+
+    collectCoin() {
+      this.coin = null;
+      Storage.addCoins(1);
+      Audio.coin();
+      this.updateHud();
+      const rect = this.canvas.getBoundingClientRect();
+      const px = rect.left + (this.snake[0].x + 0.5) * this.cell;
+      const py = rect.top + (this.snake[0].y + 0.5) * this.cell;
+      FX.burst(px, py, ['#FFD700', '#FFF6C9', '#FFFFFF']);
+      FX.floatText(px, py, '+1 🪙', '#FFD700');
     },
 
     triggerSecretMode() {
@@ -558,6 +763,8 @@
       Audio.gameOver();
       this.shakeFrames = 14;
       Storage.set('highScore', Math.max(Storage.data.highScore, this.score));
+      Storage.addPlayTime(Math.round(this.sessionSeconds)); // V1.3 §6
+      this.sessionSeconds = 0;
       setTimeout(() => UI.showGameOver(), 260);
     },
 
@@ -578,6 +785,7 @@
       ctx.translate(shakeX, shakeY);
 
       this.drawBoard(ctx, size);
+      if (this.coin) this.drawCoin(ctx); // V1.3 §2
       this.drawFood(ctx);
       this.drawSnake(ctx);
 
@@ -592,6 +800,32 @@
           ctx.fillRect(x * this.cell, y * this.cell, this.cell, this.cell);
         }
       }
+    },
+
+    // V1.3 §2 — a small bouncing golden coin, drawn the same lightweight way as food
+    drawCoin(ctx) {
+      const c = this.coin;
+      c.bounce = (c.bounce + 0.18) % (Math.PI * 2);
+      const bounceOffset = Math.sin(c.bounce) * 3;
+      const cx = c.x * this.cell + this.cell / 2;
+      const cy = c.y * this.cell + this.cell / 2 + bounceOffset;
+
+      ctx.save();
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(cx, c.y * this.cell + this.cell * 0.85, this.cell * 0.24, this.cell * 0.09, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.shadowColor = '#FFD700';
+      ctx.shadowBlur = 16;
+      ctx.font = `${this.cell * 0.7}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🪙', cx, cy);
+      ctx.restore();
     },
 
     drawFood(ctx) {
@@ -633,12 +867,15 @@
         const radius = isHead ? this.cell * 0.48 : this.cell * 0.42 * (1 - i / (this.snake.length * 2.2));
 
         let bodyColor;
+        const skin = SKINS[Storage.data.currentSkin] || SKINS.green; // V1.3 §3
         if (this.secretMode) {
           bodyColor = rainbow[i % rainbow.length];
         } else if (this.glowFrames > 0) {
           bodyColor = '#FFD700';
+        } else if (skin.rainbow) {
+          bodyColor = rainbow[i % rainbow.length];
         } else {
-          bodyColor = isHead ? '#4CAF50' : '#5FCB6C';
+          bodyColor = isHead ? skin.headColor : skin.bodyColor;
         }
 
         ctx.save();
@@ -707,6 +944,10 @@
       $('hud-score').textContent = this.score;
       $('hud-best').textContent = Storage.data.highScore;
       $('menu-high-score').textContent = Storage.data.highScore;
+      const levelEl = $('hud-level');
+      if (levelEl) levelEl.textContent = this.level; // V1.3 §1
+      const coinsEl = $('hud-coins');
+      if (coinsEl) coinsEl.textContent = Storage.data.coins; // V1.3 §2
     },
 
     pause() {
@@ -722,6 +963,10 @@
       this.running = false;
       if (this.rafId) cancelAnimationFrame(this.rafId);
       Audio.stopMusic();
+      if (this.sessionSeconds > 0) { // V1.3 §6 — safety flush if quitting via pause/menu
+        Storage.addPlayTime(Math.round(this.sessionSeconds));
+        this.sessionSeconds = 0;
+      }
     }
   };
 
@@ -823,6 +1068,15 @@
       $('btn-settings-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
       $('btn-credits-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
 
+      // V1.3 — Shop / Achievements / Stats menu buttons
+      $('btn-shop').addEventListener('click', () => { Audio.click(); this.renderShop(); Screens.show('shop'); });
+      $('btn-shop-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
+      $('btn-achievements').addEventListener('click', () => { Audio.click(); this.renderAchievements(); Screens.show('achievements'); });
+      $('btn-achievements-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
+      $('btn-stats').addEventListener('click', () => { Audio.click(); this.renderStats(); Screens.show('stats'); });
+      $('btn-stats-back').addEventListener('click', () => { Audio.click(); Screens.show('menu'); });
+      $('btn-daily-reward-close').addEventListener('click', () => { Audio.click(); Screens.overlay('daily-reward', false); });
+
       $('btn-sound-toggle').addEventListener('click', () => {
         Audio.init();
         const on = !Storage.data.sfxOn || !Storage.data.musicOn ? true : false;
@@ -916,6 +1170,87 @@
       Game.updateHud();
       Screens.show('menu');
       Audio.startMusic('menu');
+    },
+
+    // ---------- V1.3 §3 — Character Shop ----------
+    renderShop() {
+      const grid = $('shop-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+      Object.keys(SKINS).forEach((id) => {
+        const skin = SKINS[id];
+        const owned = Storage.data.unlockedSkins.includes(id);
+        const equipped = Storage.data.currentSkin === id;
+        const card = document.createElement('div');
+        card.className = 'shop-card';
+        const preview = skin.rainbow
+          ? 'linear-gradient(90deg, #FF6F61, #FFD93D, #6FE08A, #7FB8F0, #B983FF)'
+          : `linear-gradient(160deg, ${skin.headColor}, ${skin.bodyColor})`;
+        card.innerHTML = `
+          <div class="shop-preview" style="background:${preview}"></div>
+          <span class="shop-skin-name">${skin.name}</span>
+          <span class="shop-skin-cost">${skin.cost === 0 ? 'Free' : `🪙 ${skin.cost}`}</span>
+          <button class="btn ${equipped ? 'btn-secondary' : 'btn-primary'} shop-action">
+            ${equipped ? '✔️ Equipped' : (owned ? 'Equip' : 'Buy')}
+          </button>
+        `;
+        card.querySelector('.shop-action').addEventListener('click', () => {
+          Audio.click();
+          if (Storage.data.currentSkin === id) return; // already equipped
+          if (Storage.data.unlockedSkins.includes(id)) {
+            Storage.set('currentSkin', id);
+          } else if (Storage.spendCoins(skin.cost)) {
+            Storage.unlockSkin(id);
+            Storage.set('currentSkin', id);
+            FX.confetti(60);
+          } else {
+            return; // not enough coins — silently no-op, balance shown updates nothing
+          }
+          this.renderShop();
+        });
+        grid.appendChild(card);
+      });
+      const balanceEl = $('shop-coin-balance');
+      if (balanceEl) balanceEl.textContent = Storage.data.coins;
+    },
+
+    // ---------- V1.3 §5 — Achievements ----------
+    renderAchievements() {
+      const list = $('achievements-list');
+      if (!list) return;
+      list.innerHTML = '';
+      ACHIEVEMENTS.forEach((a) => {
+        const done = a.done(Storage.data);
+        const item = document.createElement('div');
+        item.className = 'achievement-item' + (done ? ' done' : '');
+        item.innerHTML = `
+          <span class="achievement-icon">${done ? a.icon : '🔒'}</span>
+          <span class="achievement-text">
+            <strong>${a.title}</strong>
+            <small>${a.desc}</small>
+          </span>
+          <span class="achievement-state">${done ? '✅' : ''}</span>
+        `;
+        list.appendChild(item);
+      });
+    },
+
+    // ---------- V1.3 §6 — Statistics ----------
+    renderStats() {
+      const s = Storage.data.stats;
+      const favorite = Object.keys(s.fruitCounts).length
+        ? Object.keys(s.fruitCounts).reduce((a, b) => (s.fruitCounts[a] >= s.fruitCounts[b] ? a : b))
+        : '—';
+      const minutes = Math.floor(s.timePlayed / 60);
+      const seconds = s.timePlayed % 60;
+      const setText = (id, val) => { const el = $(id); if (el) el.textContent = val; };
+      setText('stat-best-score', Storage.data.highScore);
+      setText('stat-games-played', s.gamesPlayed);
+      setText('stat-total-fruits', s.totalFruits);
+      setText('stat-total-coins', Storage.data.coins);
+      setText('stat-highest-level', s.highestLevel);
+      setText('stat-favorite-fruit', favorite);
+      setText('stat-time-played', `${minutes}m ${seconds}s`);
     }
   };
 
@@ -928,6 +1263,7 @@
     Input.init();
     UI.init();
     Screens.show('menu');
+    DailyReward.checkAndGrant(); // V1.3 §4
 
     // Start ambient menu music on first user interaction
     // (browsers block audio until a gesture happens).
