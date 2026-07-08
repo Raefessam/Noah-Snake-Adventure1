@@ -151,67 +151,82 @@
       <div class="menu-card">
         <h2 class="panel-title">Settings</h2>
 
-        <!-- v2.4 Phase 4 — settings grouped into clear sections -->
-        <h3 class="settings-section-title">🔊 Audio</h3>
-        <div class="settings-row">
-          <span class="settings-label">🔊 Sound Effects</span>
-          <label class="switch">
-            <input type="checkbox" id="toggle-sfx" checked>
-            <span class="slider"></span>
-          </label>
+        <!-- v2.4 Phase 4 / v2.5 Step 9 — settings grouped into distinct cards -->
+        <div class="settings-card">
+          <h3 class="settings-section-title">🔊 Audio</h3>
+          <div class="settings-row">
+            <span class="settings-label">🔊 Sound Effects</span>
+            <label class="switch">
+              <input type="checkbox" id="toggle-sfx" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="settings-row">
+            <span class="settings-label">🎵 Music</span>
+            <label class="switch">
+              <input type="checkbox" id="toggle-music" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
         </div>
 
-        <div class="settings-row">
-          <span class="settings-label">🎵 Music</span>
-          <label class="switch">
-            <input type="checkbox" id="toggle-music" checked>
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <h3 class="settings-section-title">🎨 Graphics</h3>
-        <div class="settings-row">
-          <span class="settings-label">🌗 Reduced Motion</span>
-          <label class="switch">
-            <input type="checkbox" id="toggle-motion">
-            <span class="slider"></span>
-          </label>
+        <div class="settings-card">
+          <h3 class="settings-section-title">🎨 Graphics</h3>
+          <div class="settings-row">
+            <span class="settings-label">🌗 Reduced Motion</span>
+            <label class="switch">
+              <input type="checkbox" id="toggle-motion">
+              <span class="slider"></span>
+            </label>
+          </div>
         </div>
 
         <!-- v1.5 §8 — Accessibility -->
-        <h3 class="settings-section-title">♿ Accessibility</h3>
-        <div class="settings-row">
-          <span class="settings-label">🔠 Large UI Mode</span>
-          <label class="switch">
-            <input type="checkbox" id="toggle-large-ui">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">🎨 Color Friendly Mode</span>
-          <label class="switch">
-            <input type="checkbox" id="toggle-color-friendly">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">◐ High Contrast</span>
-          <label class="switch">
-            <input type="checkbox" id="toggle-high-contrast">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">👆 Bigger Touch Buttons</span>
-          <label class="switch">
-            <input type="checkbox" id="toggle-big-buttons">
-            <span class="slider"></span>
-          </label>
+        <div class="settings-card">
+          <h3 class="settings-section-title">♿ Accessibility</h3>
+          <div class="settings-row">
+            <span class="settings-label">🔠 Large UI Mode</span>
+            <label class="switch">
+              <input type="checkbox" id="toggle-large-ui">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="settings-row">
+            <span class="settings-label">🎨 Color Friendly Mode</span>
+            <label class="switch">
+              <input type="checkbox" id="toggle-color-friendly">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="settings-row">
+            <span class="settings-label">◐ High Contrast</span>
+            <label class="switch">
+              <input type="checkbox" id="toggle-high-contrast">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="settings-row">
+            <span class="settings-label">👆 Bigger Touch Buttons</span>
+            <label class="switch">
+              <input type="checkbox" id="toggle-big-buttons">
+              <span class="slider"></span>
+            </label>
+          </div>
         </div>
 
-        <h3 class="settings-section-title">🎮 Gameplay</h3>
-        <button id="btn-reset-score" class="btn btn-warning">🗑️ Reset High Score</button>
-        <button id="btn-settings-back" class="btn btn-secondary">⬅️ Back</button>
+        <div class="settings-card">
+          <h3 class="settings-section-title">🎮 Gameplay</h3>
+          <button id="btn-reset-score" class="btn btn-warning">🗑️ Reset High Score</button>
+        </div>
+
+        <!-- v2.5 Step 9 — About -->
+        <div class="settings-card settings-about">
+          <h3 class="settings-section-title">ℹ️ About</h3>
+          <p class="settings-about-text">Noah Snake Adventure<br>Made with ❤️ by Dad Raef</p>
+        </div>
+
+        <button id="btn-settings-back" class="btn btn-secondary btn-lg">⬅️ Back</button>
       </div>
     </section>
 

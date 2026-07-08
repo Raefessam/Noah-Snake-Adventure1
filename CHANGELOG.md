@@ -1,111 +1,115 @@
-# Noah Snake Adventure — v2.4 "UI & Accessibility Edition"
+# Noah Snake Adventure — v2.5 "Mobile First UI/UX Redesign"
 
-UI/UX and accessibility release only. No gameplay, movement, collision,
-scoring, or save-format changes.
-
-## Important note on scope
-
-Several items in this brief were **already implemented in earlier releases**
-and were verified working rather than rebuilt:
-- Large UI Mode, Color Friendly Mode, High Contrast, Bigger Touch Buttons,
-  Reduced Motion — all exist since v1.5 / earlier (Settings screen).
-- Animated HUD number transitions (`popHud`), button press/hover/glow
-  feedback, safe-area support — all exist since v1.3–v2.1.
-- Kid-friendly positive messages ("Great Job!", "Awesome!", "Fantastic!",
-  "Super Hero!", "Wonderful!", "Amazing Noah!") — the existing Emotes system
-  (v1.5) already covers Phase 6 by displaying these after achievements and
-  missions.
-- "Level Complete" celebration (stars, confetti, sound, banner) — the
-  existing Level-Up system already covers this.
-
-This release focused on the genuinely missing pieces from the brief.
+UI/UX and responsive-layout release only. `game.js` (the game engine) was
+**not modified** — confirmed byte-identical to v2.4, per the "read-only
+engine" rule in this release's brief. See `UI_AUDIT.md` for the full audit
+this release was based on.
 
 ## Files modified
 
 - `index.html`
-- `game.js`
 - `style.css`
 
-No files renamed. No functions renamed. No save-format changes.
+## Files NOT modified
+
+- `game.js` — verified byte-identical to v2.4 (zero diff). No responsive
+  change required touching gameplay code.
 
 ## What changed
 
-### Phase 4 — Settings reorganized into sections (`index.html`, `style.css`)
-The previously flat list of toggles is now grouped under three headers:
-🔊 Audio, 🎨 Graphics, ♿ Accessibility (plus a 🎮 Gameplay label above the
-existing Reset/Back buttons). **Every existing `id` (`toggle-sfx`,
-`toggle-music`, `toggle-motion`, `toggle-large-ui`, `toggle-color-friendly`,
+### Touch controls redesigned (`style.css` — `.touch-btn`, `.touch-mid`,
+`body.big-buttons .touch-btn`)
+- Size increased from 56px to `clamp(80px, 20vw, 92px)` — meets the 80px
+  minimum touch-target requirement while still scaling with viewport width.
+- Added a 3D layered shadow (was a single flat shadow), a glow-on-press
+  effect, and a CSS-only ripple animation (reusing the same technique
+  already used by `.btn`, so no new CSS pattern was introduced).
+- `.touch-mid` gap increased from 46px to 56px to keep proper spacing
+  around the larger buttons.
+- The "Bigger Touch Buttons" accessibility mode (76px) was bumped to 104px
+  so it remains meaningfully larger than the new 80-92px default — this
+  was a real inconsistency the audit caught (it would otherwise have become
+  *smaller* than the new baseline).
+
+### Settings screen redesigned into cards (`index.html`, `style.css`)
+Each settings section (🔊 Audio, 🎨 Graphics, ♿ Accessibility, 🎮 Gameplay)
+is now visually its own rounded, shadowed card instead of a flat list with
+header dividers. Added an ℹ️ About card. **Every existing `<input>` id is
+unchanged** — verified each of `toggle-sfx`, `toggle-music`,
+`toggle-motion`, `toggle-large-ui`, `toggle-color-friendly`,
 `toggle-high-contrast`, `toggle-big-buttons`, `btn-reset-score`,
-`btn-settings-back`) is completely unchanged** — verified each appears
-exactly once, still findable by `game.js`. Only the surrounding markup and a
-new `.settings-section-title` CSS rule were added. **Why this is safe:**
-`game.js` looks up every setting purely by `id` via `$('id')`; it never
-depends on DOM position or parent structure, so grouping the same elements
-under new headers cannot break any existing wiring.
+`btn-settings-back` appears exactly once and is still resolvable by
+`game.js`.
 
-### Phase 5 — Color-blind friendly fruit outline (`game.js`, `Game.drawFood`)
-When Color Friendly Mode is on (existing toggle, existing save flag), fruit
-now renders with an additional fixed dark outline ring, so it reads by shape/
-contrast rather than color alone. Reads the existing
-`Storage.data.accessibility.colorFriendly` flag — no new setting, no save
-schema change. **Why this is safe:** purely an additive `ctx.stroke()` call
-inside the existing per-frame `drawFood()`, gated behind a flag that was
-already being read elsewhere; skipped entirely when the mode is off (default).
+### Responsive typography (`style.css` — `.title-emoji`, `.hud-pill`)
+Converted two remaining fixed-px font-sizes (which previously relied on a
+manual breakpoint jump) to `clamp()` for smooth, continuous scaling across
+viewport widths. The existing breakpoint overrides for these same elements
+still apply and simply refine the value at specific widths — nothing was
+removed.
 
-### Phase 7 — Tutorial pointing hint (`index.html`, `style.css`)
-Added a small bouncing 👉 next to the "use arrow keys / swipe / buttons"
-tutorial line, reinforcing the instruction visually for early readers. Pure
-CSS `@keyframes`, no JS changes, no effect on the tutorial's existing
-one-time-show logic.
+### Safe-area coverage extended to modals (`style.css` — `.overlay`)
+Overlay padding now uses `max(20px, env(safe-area-inset-*))` on all four
+sides (previously a flat `20px`). Defensive fix for extreme landscape/notch
+combinations — centered modal content rarely reaches the notch already, so
+this has no visible effect in the common case.
 
-### Phase 8 — Game Over: Level + Stars, larger primary buttons
-(`index.html`, `game.js`, function `UI.showGameOver`)
-Added two new stat boxes — Level reached and Stars earned (1–3 stars based
-on how many World Map stages were cleared that run, reusing the existing
-`STAGES` data — no new tracking, no new save fields). "Play Again" and "Main
-Menu" buttons now use the existing `.btn-lg` class (already used elsewhere,
-e.g. the main Play button) for better tap targets, per the "Large Play
-Again / Large Home button" request.
+### Clipped-content prevention (`style.css` — `.menu-card`)
+Added `max-height: 90vh; overflow-y: auto;` to the shared `.menu-card`
+container used by every non-game screen. This is a **pure safety net**: it
+only takes effect if a screen's content actually exceeds 90% of the
+viewport height (none do today), so it has zero visual effect on the
+current app, while preventing any content from ever being silently clipped
+on short viewports (the app has `overflow: hidden` at the `html`/`body`
+level, so without this fix, overflowing content would simply be invisible
+rather than scrollable).
 
 ## Performance impact
 
-- No new animation loops, timers, or `requestAnimationFrame` calls.
-- No new `addEventListener` calls — the tutorial pointer and section
-  headers are pure CSS; the fruit outline reuses the existing per-frame
-  canvas draw call.
-- The color-blind outline adds one conditional `ctx.stroke()` per frame,
-  only when Color Friendly Mode is enabled (off by default) — negligible.
-- Net diff: 0 JS lines removed, ~15 JS lines added; 0 CSS lines removed,
-  ~25 CSS lines added; HTML is restructuring + 2 small additions, 0 ids
-  removed or renamed.
+- Zero new JavaScript — this release is CSS/HTML only.
+- Zero new `addEventListener`, `setInterval`, or `setTimeout` calls (none
+  were possible, since `game.js` wasn't touched).
+- `clamp()`, `max()`, and `env()` are computed by the browser's CSS engine
+  at layout time, not JS — no runtime/FPS cost.
+- The touch-button ripple/glow are GPU-composited CSS transitions
+  (`transform`/`opacity`/`box-shadow`), consistent with every other
+  animation already in the game — no measurable FPS impact expected.
+- `.menu-card`'s new `overflow-y: auto` only activates on the rare
+  screen/viewport combination where content actually overflows; otherwise
+  it's a no-op.
 
 ## Compatibility confirmation
 
+- `game.js` unmodified — confirmed via `diff` (zero lines changed).
 - Every `id` referenced by `game.js` still resolves in `index.html`
   (verified programmatically).
-- Save system (`Storage.*`) — only **read** in this release
-  (`Storage.data.accessibility.colorFriendly`, already-existing field); zero
-  writes, zero schema changes, zero new fields.
-- Movement, collision, scoring, difficulty, menus, pause/resume/restart,
-  touch/keyboard input — zero lines touched.
+- Every pre-existing Settings-screen input id confirmed present exactly
+  once after the card restructuring.
+- Save system, movement, collision, scoring, difficulty, audio engine,
+  menus/navigation logic — zero lines touched (impossible to touch, since
+  `game.js` wasn't modified).
 
 ## Regression checklist (verified before packaging)
 
-- [x] `node --check game.js` — no syntax errors
-- [x] CSS brace balance — 440/440 (matched)
+- [x] `node --check game.js` — no syntax errors (unchanged file, still valid)
+- [x] CSS brace balance — 446/446 (matched)
 - [x] HTML div/section tag balance — matched
 - [x] Every `$('id')` reference in `game.js` resolves in `index.html`
-- [x] Every pre-existing settings-screen element id confirmed present
-      exactly once (no duplication introduced by the reorganization)
-- [x] Full diff reviewed — zero unintended removals in JS or CSS; the two
-      "removed" HTML lines are the intentional `btn-lg` class upgrade
-- [x] Zero `Storage`/`localStorage` write calls added or modified
+- [x] Every pre-existing settings toggle/button id present exactly once
+- [x] `game.js` confirmed byte-identical to the v2.4 baseline
 
-## Files intentionally left untouched
+## Screens redesigned this release
 
-- Save system (`Storage` object and its schema)
-- Movement/collision logic (`Game.tick`, `Game.setDirection`)
-- Menus/screen-navigation logic (`Screens`, `UI.startGame`, etc.)
-- Audio engine architecture
-- Existing Emotes/Kid-Mode messaging system (already satisfies Phase 6)
-- Existing Level-Up celebration system (already satisfies Phase 9)
+- Settings (grouped cards + About section)
+- Touch controls (used on the Game screen and Multiplayer screen)
+- Overlays/modals (safe-area padding, applies to all: Pause, Game Over,
+  Daily Reward, Tutorial, VS Winner, Team Victory)
+- All `.menu-card` screens gain overflow protection (Main Menu, Mode
+  Select, Player Setup, Levels, Settings, Shop, Achievements, Statistics,
+  Missions, World Map, Collection Book)
+
+## Screens audited and found already adequate (not changed)
+
+See `UI_AUDIT.md` for full detail — Main Menu, Game Over/celebration
+screens, canvas sizing/scaling, and the core accessibility toggle set were
+all verified to already meet this release's bar and were left untouched.
