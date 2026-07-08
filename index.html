@@ -151,6 +151,8 @@
       <div class="menu-card">
         <h2 class="panel-title">Settings</h2>
 
+        <!-- v2.4 Phase 4 — settings grouped into clear sections -->
+        <h3 class="settings-section-title">🔊 Audio</h3>
         <div class="settings-row">
           <span class="settings-label">🔊 Sound Effects</span>
           <label class="switch">
@@ -167,6 +169,7 @@
           </label>
         </div>
 
+        <h3 class="settings-section-title">🎨 Graphics</h3>
         <div class="settings-row">
           <span class="settings-label">🌗 Reduced Motion</span>
           <label class="switch">
@@ -176,6 +179,7 @@
         </div>
 
         <!-- v1.5 §8 — Accessibility -->
+        <h3 class="settings-section-title">♿ Accessibility</h3>
         <div class="settings-row">
           <span class="settings-label">🔠 Large UI Mode</span>
           <label class="switch">
@@ -205,6 +209,7 @@
           </label>
         </div>
 
+        <h3 class="settings-section-title">🎮 Gameplay</h3>
         <button id="btn-reset-score" class="btn btn-warning">🗑️ Reset High Score</button>
         <button id="btn-settings-back" class="btn btn-secondary">⬅️ Back</button>
       </div>
@@ -394,9 +399,20 @@
             <span id="final-missions" class="score-value">0</span>
           </div>
         </div>
+        <!-- v2.4 Phase 8 — level reached and stars earned this round -->
+        <div class="gameover-scores">
+          <div class="score-box">
+            <span class="score-label">🎖️ Level</span>
+            <span id="final-level" class="score-value">1</span>
+          </div>
+          <div class="score-box">
+            <span class="score-label">⭐ Stars</span>
+            <span id="final-stars" class="score-value">☆☆☆</span>
+          </div>
+        </div>
         <p id="new-record-msg" class="new-record">🏅 New Record! 🌟</p>
-        <button id="btn-play-again" class="btn btn-primary">🔁 Play Again</button>
-        <button id="btn-gameover-menu" class="btn btn-secondary">🏠 Main Menu</button>
+        <button id="btn-play-again" class="btn btn-primary btn-lg">🔁 Play Again</button>
+        <button id="btn-gameover-menu" class="btn btn-secondary btn-lg">🏠 Main Menu</button>
       </div>
     </div>
 
@@ -415,6 +431,7 @@
       <div class="overlay-card">
         <h2 class="panel-title">👋 Hi Noah!</h2>
         <p class="tutorial-text">🕹️ Use the arrow keys, swipe, or the on-screen buttons to steer.</p>
+        <span class="tutorial-pointer" aria-hidden="true">👉</span>
         <p class="tutorial-text">🍎 Eat fruit to grow and score points.</p>
         <p class="tutorial-text">🪙 Grab coins and gifts for bonus rewards!</p>
         <button id="btn-tutorial-close" class="btn btn-primary">Let's Go! 🚀</button>

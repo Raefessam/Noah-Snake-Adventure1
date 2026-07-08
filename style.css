@@ -760,6 +760,18 @@ button {
   padding: 12px 4px;
   border-bottom: 2px dashed #E1E9F2;
 }
+
+/* v2.4 Phase 4 — settings section headers */
+.settings-section-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--color-primary);
+  text-align: left;
+  margin: 18px 0 4px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--color-border);
+}
+.settings-section-title:first-of-type { margin-top: 4px; }
 .settings-label { font-weight: 700; color: var(--ink); font-size: 15px; }
 
 .switch { position: relative; display: inline-block; width: 52px; height: 30px; }
@@ -1413,6 +1425,15 @@ body.reduced-motion .canvas-wrap { animation: none; } /* respect existing reduce
   font-size: 14px;
   margin: 8px 0;
   line-height: 1.4;
+}
+.tutorial-pointer {
+  display: inline-block;
+  font-size: 22px;
+  animation: tutorial-point-bounce 1s ease-in-out infinite;
+}
+@keyframes tutorial-point-bounce {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(8px); }
 }
 
 /* §7 Photo Mode — hide interactive chrome, keep the animated background */

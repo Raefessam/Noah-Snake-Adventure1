@@ -1865,6 +1865,20 @@
       ctx.translate(cx, cy);
       ctx.rotate(wobble);
       ctx.scale(pulse, pulse);
+
+      // v2.4 Phase 5 — color-blind friendly outline: a fixed dark ring so fruit
+      // is distinguishable from the grass by shape/contrast, not just color.
+      if (Storage.data.accessibility.colorFriendly) {
+        ctx.save();
+        ctx.globalAlpha = 0.6 * (0.5 + 0.5 * appear);
+        ctx.strokeStyle = '#1B3A2F';
+        ctx.lineWidth = this.cell * 0.05;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.cell * 0.42, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       ctx.font = `${this.cell * 1.0}px serif`; // Visual Evolution — ~25% bigger (was 0.8)
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -2409,6 +2423,12 @@
       setText('final-xp', Game.xpThisGame);
       const missionsNow = MISSIONS.filter((m) => Storage.data.completedMissions.includes(m.id)).length;
       setText('final-missions', Math.max(0, missionsNow - Game.missionsAtStart));
+
+      // v2.4 Phase 8 — level reached and stars earned this round (reuses existing level/stage data)
+      setText('final-level', Game.level);
+      const stagesCleared = STAGES.filter((s) => Game.level > s.levelRequired).length;
+      const starCount = clamp(stagesCleared, 0, 3);
+      setText('final-stars', '⭐'.repeat(starCount) + '☆'.repeat(3 - starCount));
 
       Screens.overlay('gameover', true);
     },

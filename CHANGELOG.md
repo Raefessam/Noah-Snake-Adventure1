@@ -1,101 +1,111 @@
-# Noah Snake Adventure — v2.3 "Visual Magic Update"
+# Noah Snake Adventure — v2.4 "UI & Accessibility Edition"
 
-Visual polish release only. No gameplay, collision, scoring, save-system, menu,
-navigation, control, game-loop, pause/restart, or audio-architecture changes.
+UI/UX and accessibility release only. No gameplay, movement, collision,
+scoring, or save-format changes.
 
 ## Important note on scope
 
-Most of the items requested in this update's brief (snake breathing/blinking/
-smile/tail-follow, smooth interpolation, fruit float/rotate/pulse/glow/shadow/
-sparkle, particle fade/scale/color variation, floating score text, animated
-clouds/butterflies/birds/leaves/sun-rays/rainbow, HUD animated counters,
-button hover/press feedback, camera pulse on eating, score popup animation,
-vibration on eat, safe-area support) were **already implemented in earlier
-releases** (Visual Evolution, v1.2–v1.5, v2.0–v2.2). This release audited the
-current build against the full brief and implemented only what was genuinely
-still missing, to avoid redundant or duplicate work.
+Several items in this brief were **already implemented in earlier releases**
+and were verified working rather than rebuilt:
+- Large UI Mode, Color Friendly Mode, High Contrast, Bigger Touch Buttons,
+  Reduced Motion — all exist since v1.5 / earlier (Settings screen).
+- Animated HUD number transitions (`popHud`), button press/hover/glow
+  feedback, safe-area support — all exist since v1.3–v2.1.
+- Kid-friendly positive messages ("Great Job!", "Awesome!", "Fantastic!",
+  "Super Hero!", "Wonderful!", "Amazing Noah!") — the existing Emotes system
+  (v1.5) already covers Phase 6 by displaying these after achievements and
+  missions.
+- "Level Complete" celebration (stars, confetti, sound, banner) — the
+  existing Level-Up system already covers this.
+
+This release focused on the genuinely missing pieces from the brief.
 
 ## Files modified
 
+- `index.html`
 - `game.js`
 - `style.css`
-- `index.html` — **not modified** (confirmed byte-identical to the previous
-  build; no files renamed, no structure changed)
+
+No files renamed. No functions renamed. No save-format changes.
 
 ## What changed
 
-### 1. Snake body wave (Phase 1 — `game.js`, function `Game.drawSnake`)
-Added a gentle S-curve sine-wave offset to mid-body segments (not the head,
-which needs to stay precise for the eyes/face, and not the tail, which
-already had its own wag). The offset is applied only to the rendered `cx`/
-`cy` position for that frame — it never touches `this.snake` (the actual
-grid-position array used for collision and movement). **Why this is safe:**
-collision detection and movement logic read `this.snake` directly and are
-untouched; this only changes where a segment is *drawn* for one frame.
+### Phase 4 — Settings reorganized into sections (`index.html`, `style.css`)
+The previously flat list of toggles is now grouped under three headers:
+🔊 Audio, 🎨 Graphics, ♿ Accessibility (plus a 🎮 Gameplay label above the
+existing Reset/Back buttons). **Every existing `id` (`toggle-sfx`,
+`toggle-music`, `toggle-motion`, `toggle-large-ui`, `toggle-color-friendly`,
+`toggle-high-contrast`, `toggle-big-buttons`, `btn-reset-score`,
+`btn-settings-back`) is completely unchanged** — verified each appears
+exactly once, still findable by `game.js`. Only the surrounding markup and a
+new `.settings-section-title` CSS rule were added. **Why this is safe:**
+`game.js` looks up every setting purely by `id` via `$('id')`; it never
+depends on DOM position or parent structure, so grouping the same elements
+under new headers cannot break any existing wiring.
 
-### 2. Camera pulse on Secret Mode + new High Score (Phase 7/8 —
-`Game.triggerSecretMode`, `UI.showGameOver`)
-Both moments now call the **existing** `smartCameraPulse()` helper (already
-used for level-ups and milestones since v2.0). No new animation system was
-created — this just extends two celebration moments to use the system that
-already exists for others. **Why this is safe:** `smartCameraPulse()` is a
-pure function that toggles a CSS class on the canvas wrapper; it has no
-gameplay side effects and was already proven safe in prior releases.
+### Phase 5 — Color-blind friendly fruit outline (`game.js`, `Game.drawFood`)
+When Color Friendly Mode is on (existing toggle, existing save flag), fruit
+now renders with an additional fixed dark outline ring, so it reads by shape/
+contrast rather than color alone. Reads the existing
+`Storage.data.accessibility.colorFriendly` flag — no new setting, no save
+schema change. **Why this is safe:** purely an additive `ctx.stroke()` call
+inside the existing per-frame `drawFood()`, gated behind a flag that was
+already being read elsewhere; skipped entirely when the mode is off (default).
 
-### 3. Flower sway (Phase 4 — `style.css`, `.flowers`, `.mini-flowers`)
-The two background flower decorations were static; they now sway gently via
-a CSS `@keyframes` rotation, offset in time so the two flower layers don't
-move in perfect unison. Pure decoration, `pointer-events` unaffected.
+### Phase 7 — Tutorial pointing hint (`index.html`, `style.css`)
+Added a small bouncing 👉 next to the "use arrow keys / swipe / buttons"
+tutorial line, reinforcing the instruction visually for early readers. Pure
+CSS `@keyframes`, no JS changes, no effect on the tutorial's existing
+one-time-show logic.
 
-### 4. Soft vignette (Phase 5 — `style.css`, `#game-canvas`)
-Added a third `inset` layer to the game canvas's existing `box-shadow`
-declaration — a very soft dark fade at the board's edges. Scoped precisely
-to the canvas element itself (not a full-screen overlay), so it cannot ever
-sit over the HUD or touch controls, and adds no new DOM elements.
+### Phase 8 — Game Over: Level + Stars, larger primary buttons
+(`index.html`, `game.js`, function `UI.showGameOver`)
+Added two new stat boxes — Level reached and Stars earned (1–3 stars based
+on how many World Map stages were cleared that run, reusing the existing
+`STAGES` data — no new tracking, no new save fields). "Play Again" and "Main
+Menu" buttons now use the existing `.btn-lg` class (already used elsewhere,
+e.g. the main Play button) for better tap targets, per the "Large Play
+Again / Large Home button" request.
 
 ## Performance impact
 
-- **No new animation loops, timers, or intervals.** The body wave reuses the
-  existing per-frame `drawSnake()` call (already running every render frame);
-  the camera-pulse calls reuse the existing `smartCameraPulse()` CSS-class
-  toggle; the flower sway and vignette are pure CSS (GPU-composited,
-  no JS cost at all).
-- No new `addEventListener` calls.
-- No new DOM elements were created for the vignette or flower sway — both
-  reuse existing elements/pseudo-elements.
-- Net JS diff: 3 changed locations, ~12 added lines total.
-- Net CSS diff: 1 modified declaration (box-shadow), ~16 added lines total
-  (all `@keyframes`/selector additions).
+- No new animation loops, timers, or `requestAnimationFrame` calls.
+- No new `addEventListener` calls — the tutorial pointer and section
+  headers are pure CSS; the fruit outline reuses the existing per-frame
+  canvas draw call.
+- The color-blind outline adds one conditional `ctx.stroke()` per frame,
+  only when Color Friendly Mode is enabled (off by default) — negligible.
+- Net diff: 0 JS lines removed, ~15 JS lines added; 0 CSS lines removed,
+  ~25 CSS lines added; HTML is restructuring + 2 small additions, 0 ids
+  removed or renamed.
 
 ## Compatibility confirmation
 
-- `index.html` unmodified — no ids, classes, or structure changed, so every
-  existing `$('id')` lookup in `game.js` still resolves (verified).
-- Save system (`Storage.*`, `localStorage`) — zero lines touched (verified
-  via diff grep for `Storage.`/`localStorage`).
-- Collision, movement, scoring, difficulty, menus, screen navigation, pause/
-  resume/restart, touch/keyboard input, and the audio engine — zero lines
-  touched.
-- CSS diff is additive except one `box-shadow` value, which only adds a
-  third shadow layer (existing two layers unchanged).
+- Every `id` referenced by `game.js` still resolves in `index.html`
+  (verified programmatically).
+- Save system (`Storage.*`) — only **read** in this release
+  (`Storage.data.accessibility.colorFriendly`, already-existing field); zero
+  writes, zero schema changes, zero new fields.
+- Movement, collision, scoring, difficulty, menus, pause/resume/restart,
+  touch/keyboard input — zero lines touched.
 
 ## Regression checklist (verified before packaging)
 
 - [x] `node --check game.js` — no syntax errors
-- [x] CSS brace balance — 434/434 (matched)
+- [x] CSS brace balance — 440/440 (matched)
 - [x] HTML div/section tag balance — matched
 - [x] Every `$('id')` reference in `game.js` resolves in `index.html`
-- [x] `index.html` confirmed byte-identical to the pre-update build
-- [x] Full diff reviewed line-by-line — only the 4 documented changes above
-- [x] No new `addEventListener` / `setInterval` / `setTimeout` introduced
+- [x] Every pre-existing settings-screen element id confirmed present
+      exactly once (no duplication introduced by the reorganization)
+- [x] Full diff reviewed — zero unintended removals in JS or CSS; the two
+      "removed" HTML lines are the intentional `btn-lg` class upgrade
+- [x] Zero `Storage`/`localStorage` write calls added or modified
 
 ## Files intentionally left untouched
 
-- `index.html` (no visual change required any markup changes this round)
-- Audio engine (`Audio` object) — already improved in earlier releases;
-  touching it again was judged unnecessary risk for no added benefit
-- Particle system core (`FX.burst`, `FX.confetti`, `FX.floaters`) — already
-  has color variation, easing, and fade/scale from prior releases
-- Snake movement/collision logic (`Game.tick`, `Game.setDirection`)
-- Save system (`Storage`)
-- Menus, screen navigation, settings, difficulty selector
+- Save system (`Storage` object and its schema)
+- Movement/collision logic (`Game.tick`, `Game.setDirection`)
+- Menus/screen-navigation logic (`Screens`, `UI.startGame`, etc.)
+- Audio engine architecture
+- Existing Emotes/Kid-Mode messaging system (already satisfies Phase 6)
+- Existing Level-Up celebration system (already satisfies Phase 9)
