@@ -387,6 +387,13 @@ button {
   position: absolute;
   font-size: 18px;
   bottom: 0;
+  transform-origin: bottom center;
+  animation: flower-sway 3.6s ease-in-out infinite; /* v2.3 Phase 4 */
+}
+.flowers::after { animation-delay: -1.8s; }
+@keyframes flower-sway {
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(6deg); }
 }
 .flowers::before { left: 15%; }
 .flowers::after { left: 70%; }
@@ -427,7 +434,10 @@ button {
   position: absolute;
   font-size: 14px;
   bottom: 0;
+  transform-origin: bottom center;
+  animation: flower-sway 4.2s ease-in-out infinite; /* v2.3 Phase 4 */
 }
+.mini-flowers::after { animation-delay: -2.1s; }
 .mini-flowers::before { left: 35%; }
 .mini-flowers::after { left: 88%; }
 
@@ -930,7 +940,7 @@ body.reduced-motion .canvas-wrap { animation: none; } /* respect existing reduce
 #game-canvas {
   border-radius: var(--radius-md);
   border: 3px solid rgba(255,255,255,0.6); /* v2.2 §3 — cleaner border */
-  box-shadow: 0 14px 34px rgba(0,0,0,0.3), 0 2px 0 rgba(255,255,255,0.4) inset; /* v2.2 §3 — layered shadow */
+  box-shadow: 0 14px 34px rgba(0,0,0,0.3), 0 2px 0 rgba(255,255,255,0.4) inset, 0 0 46px rgba(0,0,0,0.1) inset; /* v2.3 Phase 5 — soft vignette added as a third layer */
   background: #A9E38F;
   touch-action: none;
 }

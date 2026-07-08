@@ -1604,6 +1604,7 @@
       this.secretMode = true;
       Audio.secret();
       FX.confetti(160);
+      smartCameraPulse(); // v2.3 Phase 7 — reuse the existing celebration pulse
       const banner = $('secret-banner');
       banner.classList.add('show');
       setTimeout(() => banner.classList.remove('show'), 3200);
@@ -1920,6 +1921,14 @@
           const wag = Math.sin(now / 220) * this.cell * 0.06;
           cx += perpX * wag;
           cy += perpY * wag;
+        } else if (!isHead && this.snake.length > 3) {
+          // v2.3 Phase 1 — a gentle S-curve wave along the mid-body, purely
+          // cosmetic: offsets only the drawn position, never this.snake itself.
+          const perpX = this.dir.y !== 0 ? 1 : 0;
+          const perpY = this.dir.x !== 0 ? 1 : 0;
+          const wave = Math.sin(now / 260 - i * 0.6) * this.cell * 0.045;
+          cx += perpX * wave;
+          cy += perpY * wave;
         }
 
         const radius = (isHead ? this.cell * 0.48 : this.cell * 0.42 * (1 - i / (this.snake.length * 2.2))) * breathe;
@@ -2384,6 +2393,7 @@
       if (isRecord) {
         FX.confetti(140);
         Audio.victory();
+        smartCameraPulse(); // v2.3 Phase 7
         setTimeout(() => FX.confetti(90, ['#FFD700', '#FFF6C9', '#FF6F61', '#7FB8F0']), 260); // v2.2 §13 — a second "fireworks" burst
       }
 
