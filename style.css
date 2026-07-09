@@ -609,28 +609,25 @@ button {
 .high-score-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  background: linear-gradient(135deg, #FFF6D6, #FFE9A8);
-  border: 2px solid var(--gold);
-  border-radius: 999px;
-  padding: 8px 18px;
-  font-weight: 700;
-  color: var(--ink);
-  margin-bottom: 22px;
-  font-size: 14px;
+  gap: 6px;
+  color: var(--color-text-muted);
+  margin-bottom: 16px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 /* Magic Forest Update — Player Profile card */
 .profile-card {
   background: linear-gradient(160deg, #F1F6FF, #E4EFFF);
   border: 2px solid #DCE8FA;
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
+  border-radius: var(--radius-card);
+  padding: 16px 16px;
   margin-bottom: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  box-shadow: var(--shadow-soft-sm);
   animation: card-in 0.6s cubic-bezier(.34,1.56,.64,1);
 }
 .profile-avatar {
@@ -663,8 +660,46 @@ button {
 .menu-buttons {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
+
+/* Main Menu redesign — hero Play button stands alone, bigger and bolder */
+.btn-hero {
+  box-shadow: 0 8px 0 rgba(0,0,0,0.15), 0 12px 24px rgba(62,165,93,0.35);
+  font-size: 18px;
+  padding: 18px 22px;
+}
+
+/* Main Menu redesign — compact icon-grid for secondary actions, replacing
+   a long stacked list of full-width buttons (more scannable, more
+   breathing room, closer to a modern app's home screen). */
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.menu-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 8px;
+  background: linear-gradient(180deg, #FFFFFF, #F1F6FF);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+.menu-tile-icon { font-size: 26px; }
+.menu-tile-label {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--color-text);
+}
+.menu-tile:active { transform: translateY(2px) scale(0.96); box-shadow: var(--shadow-soft-sm), inset 0 0 0 2px var(--color-primary-light); }
+.menu-tile:hover { filter: brightness(1.04); box-shadow: 0 6px 16px rgba(62,165,93,0.25); }
 
 .btn {
   position: relative;
