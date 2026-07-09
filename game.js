@@ -298,6 +298,17 @@
       );
     },
 
+    // Warm little "you're doing great!" chime — a soft major-scale run,
+    // paired with the positive text emotes (Amazing!, Fantastic!, etc.)
+    encourage() {
+      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5-E5-G5-C6, a bright major arpeggio
+      notes.forEach((f, i) =>
+        this.tone(f, 0.22, { type: 'sine', volume: 0.16, delay: i * 0.07 })
+      );
+      // a soft sparkling overtone on the last note for warmth
+      this.tone(1318.5, 0.3, { type: 'sine', volume: 0.08, delay: notes.length * 0.07 });
+    },
+
     // v1.4 §7 — combo callout, pitch rises a little with each threshold
     combo(comboCount) {
       const base = 700 + Math.min(comboCount, 10) * 40;
@@ -313,6 +324,7 @@
     // V1.2 — happy little two-note chime that pitches up/down slightly
     // depending on which fruit was eaten, so each fruit feels a bit different.
     eatFruit(basePitch = 660) {
+      this.tone(basePitch * 0.5, 0.1, { type: 'sine', volume: 0.1 }); // soft low body layer
       this.tone(basePitch, 0.12, { type: 'triangle', volume: 0.25 });
       this.tone(basePitch * 1.33, 0.14, { type: 'triangle', volume: 0.18, delay: 0.06 });
     },
@@ -651,6 +663,7 @@
       FX.starBurst(36);
       flashScreen(); // Visual Evolution §9
       smartCameraPulse(); // v2.0 §7
+      Haptics.celebrate();
       banner.classList.add('show');
       clearTimeout(this.timer);
       this.timer = setTimeout(() => banner.classList.remove('show'), 3000);
@@ -682,6 +695,7 @@
       setTimeout(() => FX.starBurst(20), 220); // Visual Evolution — a second burst for a "fireworks" feel
       flashScreen(); // Visual Evolution §9
       smartCameraPulse(); // v2.0 §7
+      Haptics.celebrate();
       banner.classList.add('show');
       clearTimeout(this.timer);
       this.timer = setTimeout(() => banner.classList.remove('show'), 2800);
@@ -830,9 +844,25 @@
      Random positive callouts shown after objectives are completed.
      =========================================================== */
   const EMOTES = ['Amazing!', 'Fantastic!', 'Awesome Noah!', 'Great Job!', 'Super Hero!', 'Wonderful!'];
+  // Richer haptic feedback: different vibration patterns for different
+  // moments, instead of a single flat buzz everywhere. Silently does
+  // nothing on devices/browsers without vibration support.
+  const Haptics = {
+    buzz(pattern) {
+      if (navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) { /* unsupported */ } }
+    },
+    light() { this.buzz(10); },                    // coins, tiny pickups
+    medium() { this.buzz(18); },                    // regular fruit
+    strong() { this.buzz(28); },                    // giant/boss fruit, big combo
+    success() { this.buzz([25, 40, 25]); },          // achievement / mission complete
+    celebrate() { this.buzz([30, 30, 30, 30, 50]); }, // level up / milestone
+    gameOver() { this.buzz([40, 30, 70]); }          // game over
+  };
+
   const showEmote = (px, py) => {
     const text = EMOTES[randInt(0, EMOTES.length - 1)];
     FX.floatText(px, py, text, '#FF6F61');
+    setTimeout(() => Audio.encourage(), 160); // staggered so it doesn't clash with the achievement fanfare
   };
 
   /* ===========================================================
@@ -1242,13 +1272,14 @@
       FX.floatText(px, py, `+${points}`, this.food.color);
       eatFeedbackPulse(); // v2.1 polish §3 — tiny camera bump, distinct from the bigger celebration zoom
       FX.starBurst(6); // Visual Evolution — tiny star burst on every fruit
-      if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) { /* unsupported */ } }
+      Haptics.medium();
 
       // v1.4 §7 — combo callouts at x2/x3/x5+
       if (this.combo === 2 || this.combo === 3 || this.combo === 5 || (this.combo > 5 && this.combo % 5 === 0)) {
         Audio.combo(this.combo);
         FX.floatText(px, py - 26, `Combo x${this.combo}!`, '#FF6F61');
         FX.starBurst(this.combo * 3);
+        Haptics.strong();
       }
 
       this.checkNewAchievements(); // Visual Evolution §11
@@ -1315,6 +1346,7 @@
       Storage.addCoins(amount);
       this.coinsThisGame += amount;
       Audio.coin();
+      Haptics.light();
       this.updateHud();
       const rect = this.canvas.getBoundingClientRect();
       const px = rect.left + (this.snake[0].x + 0.5) * this.cell;
@@ -1331,6 +1363,7 @@
       const count = ACHIEVEMENTS.filter((a) => a.done(Storage.data)).length;
       if (count > this.lastAchievementCount) {
         Audio.achievement();
+        Haptics.success();
         const rect = this.canvas.getBoundingClientRect();
         showEmote(rect.left + rect.width / 2, rect.top + rect.height * 0.3); // v1.5 §4
         this.shakeFrames = Math.max(this.shakeFrames, 4); // v2.0 §7 — a very soft shake, not the harsh game-over one
@@ -1348,6 +1381,7 @@
             Storage.addXp(m.reward.xp);
             this.xpThisGame += m.reward.xp;
             Audio.achievement();
+            Haptics.success();
             FX.confetti(70, ['#FFD700', '#6FE08A', '#FFFFFF']);
             FX.starBurst(18); // v2.2 §9 — extra star burst for mission celebrations
             const rect = this.canvas.getBoundingClientRect();
@@ -1385,6 +1419,7 @@
       const def = POWERUPS[this.powerup.type];
       const type = this.powerup.type;
       Audio.levelUp();
+      Haptics.light();
       const rect = this.canvas.getBoundingClientRect();
       const px = rect.left + (this.powerup.x + 0.5) * this.cell;
       const py = rect.top + (this.powerup.y + 0.5) * this.cell;
@@ -1454,6 +1489,7 @@
         label = POWERUPS[type].name + '!';
       }
       Audio.achievement();
+      Haptics.success();
       FX.confetti(100, ['#FFD700', '#FFF6C9', '#FFC300']);
       FX.starBurst(20);
       FX.floatText(px, py, label, '#FFD700');
@@ -1516,6 +1552,7 @@
       FX.starBurst(isBoss ? 60 : 40);
       FX.floatText(px, py, `+${points}!!`, '#FFD700');
       Audio.victory();
+      Haptics.celebrate();
       flashScreen();
       if (isBoss) {
         setTimeout(flashScreen, 200); // a second flash for a bigger victory feel
@@ -1605,6 +1642,7 @@
       Audio.secret();
       FX.confetti(160);
       smartCameraPulse(); // v2.3 Phase 7 — reuse the existing celebration pulse
+      Haptics.celebrate();
       const banner = $('secret-banner');
       banner.classList.add('show');
       setTimeout(() => banner.classList.remove('show'), 3200);
@@ -1615,6 +1653,7 @@
       this.running = false;
       cancelAnimationFrame(this.rafId);
       Audio.gameOver();
+      Haptics.gameOver();
       this.shakeFrames = 14;
       Storage.set('highScore', Math.max(Storage.data.highScore, this.score));
       Storage.addPlayTime(Math.round(this.sessionSeconds)); // V1.3 §6
